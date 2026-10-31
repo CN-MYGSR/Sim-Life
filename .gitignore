@@ -1,0 +1,8 @@
+﻿
+# Godot
+.godot/
+# build output
+build/
+# dev screenshots
+shots/
+
