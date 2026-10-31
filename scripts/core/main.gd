@@ -216,6 +216,20 @@ func _run_test(name: String) -> void:
 			_start_business("diner")
 			await get_tree().create_timer(9.0).timeout
 			print("BIZ cash=", Game.cash)
+		"npcshow":
+			Game.set_job("police")
+			var nc := Data.cell_center(Vector2i(1, 1))
+			player.teleport(nc + Vector3(0, 0.3, 9.0))
+			player.rotation.y = 0.0
+			var kinds := ["pedestrian", "pedestrian", "customer", "criminal", "patient", "pedestrian", "customer"]
+			for i in range(kinds.size()):
+				var npc := NPC.spawn(npc_root, nc + Vector3(-7.2 + i * 2.4, 0.2, 2.0), kinds[i], Color(0.5, 0.5, 0.5))
+				npc.rotation.y = PI
+			await get_tree().create_timer(1.2).timeout
+			await _shot_now("D:/Sim Life/shots/npc_show.png")
+			await get_tree().create_timer(2.0).timeout
+			await _shot_now("D:/Sim Life/shots/npc_show2.png")
+			print("NPC_SHOW fps=", Engine.get_frames_per_second(), " npcs=", npc_root.get_child_count())
 		"climb2":
 			# 逐跑验证每一跑楼梯（警察局 3 层 + 医院 4 层）
 			Game.set_job("police")

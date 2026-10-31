@@ -291,6 +291,44 @@ func _make_park_decor() -> void:
 	# 公园交互点
 	Interactable.create(root, c + Vector3(0, 1.2, -13), Vector3(5, 2.4, 3), "公园长椅 · 休息",
 		Callable(host, "rest_at_park"))
+	# 静态动物装饰（Lo Polly animals FREE：纯模型，无动画）
+	_make_animal(c + Vector3(-8.0, 0.12, 2.0), "Swan", 0.7)
+	_make_animal(c + Vector3(5.2, 0.02, -5.8), "Leopard_001", 1.9)
+	_make_animal(c + Vector3(7.0, 0.02, -4.5), "Rooster_002", 2.8)
+	_make_animal(c + Vector3(-3.5, 0.02, -7.2), "Falcon", 1.1)
+
+
+var _animal_meshes: Dictionary = {}
+var _animal_mat: Material = null
+
+
+func _make_animal(pos: Vector3, animal_name: String, rot_y: float) -> void:
+	if _animal_meshes.is_empty():
+		_load_animal_meshes()
+	var mesh: Mesh = _animal_meshes.get(animal_name)
+	if mesh == null:
+		return
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	if _animal_mat != null:
+		mi.material_override = _animal_mat
+	mi.position = pos
+	mi.rotation.y = rot_y
+	root.add_child(mi)
+
+
+func _load_animal_meshes() -> void:
+	var ps: PackedScene = load("res://assets/animals/Lo Polly animals FREE.glb") as PackedScene
+	if ps == null:
+		return
+	var inst := ps.instantiate()
+	for c in inst.get_children():
+		if c is MeshInstance3D:
+			var mi := c as MeshInstance3D
+			_animal_meshes[str(mi.name)] = mi.mesh
+			if _animal_mat == null and mi.mesh != null:
+				_animal_mat = mi.mesh.surface_get_material(0)
+	inst.free()
 
 
 func _make_tree(pos: Vector3, s: float) -> void:

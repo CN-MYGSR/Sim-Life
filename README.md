@@ -1,15 +1,15 @@
-# Sim Life · 城市人生
+﻿# Sim Life · 城市人生
 
 一款用 **Godot 4.7.2** 做的第一人称开放城市人生模拟游戏。
 灵感来自 Garry's Mod 的 DarkRP 服务器：选职业、赚钱、买房、买车、装修、加入帮派。
 
-程序化生成的城市；建筑外观使用 [Quaternius《Downtown City MegaKit》](https://quaternius.com) 的 CC0 低模模块，室内家具、道路、载具与角色仍全部由代码生成。
+程序化生成的城市；建筑外观使用 [Quaternius《Downtown City MegaKit》](https://quaternius.com) 的 CC0 低模模块，NPC 使用 Quaternius 人形角色（自带走路/跑步/待机动画），室内家具、道路与载具仍由代码生成。
 
 ---
 
 ## 快速开始
 
-**直接玩：** 双击 `build/SimLife.exe`（单文件，约 140 MB，无需安装）。
+**直接玩：** 双击 `build/SimLife.exe`（单文件，约 153 MB，无需安装）。
 
 **用编辑器打开：** 用 Godot 4.7.2 打开本目录的 `project.godot`。
 
@@ -102,6 +102,8 @@
 - **城市：** 4×4 街区程序化生成，街区 44m、道路 14m，全城约 246×246 米
 - **建筑外观：** Quaternius Downtown City MegaKit（CC0）模块拼装，墙/窗/门/檐口用 MultiMesh 合批
 - **室内：** 程序化楼板 + 并排折返楼梯 + InteriorFurnish 家具；夜里窗户用发光面片模拟亮灯
+- **NPC：** Quaternius 人形角色（CC0，52 套服装），自带 Idle / Walk / Run / Death 等 17 个动画；按速度切换待机/走路/跑步，通缉犯跑步逃窜、伤员倒地
+- **动物：** 公园里有静态动物装饰（Lo Polly animals FREE，纯模型无动画）
 - **载具：** 基于 `CharacterBody3D` 的街机式驾驶（不会翻车、不会卡住）
 - **UI：** 全部代码构建，统一主题，中文字体全局注入
 
@@ -151,6 +153,8 @@ SimLife.exe -- --test=arrest                       # 自动化测试用例
 - **字体：** `Noto Sans SC`（思源黑体），**SIL Open Font License 1.1**，允许随软件免费分发与商用。
   来源：Windows 系统自带字体目录。
 - **Downtown City MegaKit：** CC0 1.0（公有领域），作者 Quaternius（https://quaternius.com），贴图已压缩后用于建筑外观。
+- **人形角色：** Quaternius《Ultimate Modular Characters》CC0 1.0，52 套角色、自带动画；`assets/chars/`。
+- **动物模型：** `Lo Polly animals FREE`（下载包内未附带 license 文件，若要商用请自行确认授权）；仅作公园静态装饰。
 
 ---
 
@@ -158,6 +162,7 @@ SimLife.exe -- --test=arrest                       # 自动化测试用例
 
 - 没有存档系统（退出即重置）。
 - 没有音效与音乐。
-- NPC 是低模人形，没有五官与语音。
+- NPC 有低模人形外观与走路/跑步/待机动画，但不会对话、没有语音；动物是静态模型，没有动画。
 - 警察 NPC 还不会主动追捕高通的玩家（通缉度目前只影响提示与氛围）。
 - 建筑内部已可进入；自有房产的装修系统仍然只对自己的房子开放。
+
