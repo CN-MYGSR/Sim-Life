@@ -216,6 +216,72 @@ func _run_test(name: String) -> void:
 			_start_business("diner")
 			await get_tree().create_timer(9.0).timeout
 			print("BIZ cash=", Game.cash)
+		"climb2":
+			# 逐跑验证每一跑楼梯（警察局 3 层 + 医院 4 层）
+			Game.set_job("police")
+			for id in ["police", "hospital"]:
+				for kb in builder.kit_buildings:
+					if str(kb.place.get("id", "")) != id:
+						continue
+					var base: Vector3 = kb.global_position
+					var sx1: float = kb.stair_x0 + 1.0
+					var sx2: float = kb.stair_x0 + 3.0
+					var z0: float = kb.stair_z0
+					var z1: float = z0 + 4.0
+					for f in range(1, kb.floors - 1):
+						var by: float = 3.0 * f
+						if f % 2 == 1:
+							player.teleport(base + Vector3(sx2, by + 0.3, z0 - 1.2))
+							player.rotation.y = PI
+						else:
+							player.teleport(base + Vector3(sx1, by + 0.3, z1 + 0.7))
+							player.rotation.y = 0.0
+						await _walk_forward(4.5)
+						print("CLIMB2 ", id, " flight=", f, " y=", snappedf(player.global_position.y, 0.1))
+		"walk":
+			# 走进警局大门 → 到楼梯口 → 上楼
+			Game.set_job("police")
+			var pc := Data.cell_center(Vector2i(0, 0))
+			player.teleport(pc + Vector3(0, 0.3, 12.2))
+			player.rotation.y = 0.0
+			await _walk_forward(2.6)
+			print("WALK_DOOR pos=", player.global_position)
+			player.teleport(pc + Vector3(30.0 * 0.5 - 4.25 + 1.0, 0.3, 20.0 * 0.5 - 5.75 + 4.7))
+			player.rotation.y = 0.0
+			await _walk_forward(5.0)
+			print("WALK_STAIRS pos=", player.global_position)
+		"climball":
+			# 逐个建筑验证：能进门 + 能上到二层
+			Game.set_job("police")
+			for kb in builder.kit_buildings:
+				var base: Vector3 = kb.global_position
+				var dhalf: float = kb.d * 0.5
+				player.teleport(base + Vector3(0, 0.3, dhalf + 2.4))
+				player.rotation.y = 0.0
+				await _walk_forward(2.2)
+				var inside: bool = player.global_position.z < base.z + dhalf - 1.5
+				var sx: float = kb.stair_x0 + 1.0
+				var z_low: float = kb.stair_z0 + 4.0
+				player.teleport(base + Vector3(sx, 0.3, z_low + 0.7))
+				player.rotation.y = 0.0
+				await _walk_forward(4.5)
+				print("CLIMB ", kb.kind, " id=", kb.place.get("id", ""), " inside=", inside, " y=", snappedf(player.global_position.y, 0.1))
+		"tour":
+			Game.set_job("police")
+			var tc := Data.cell_center(Vector2i(0, 0))
+			player.teleport(tc + Vector3(0, 0.3, 12.2))
+			player.rotation.y = 0.0
+			for i in range(6):
+				await _walk_forward(0.8)
+				print("TOUR ", i, " pos=", player.global_position)
+				await _shot_now("D:/Sim Life/shots/tour_%d.png" % i)
+			# 楼梯
+			player.teleport(tc + Vector3(30.0 * 0.5 - 4.25 + 1.0, 0.3, 20.0 * 0.5 - 5.75 + 4.7))
+			player.rotation.y = 0.0
+			for i in range(8):
+				await _walk_forward(0.9)
+				print("STAIR ", i, " pos=", player.global_position)
+				await _shot_now("D:/Sim Life/shots/tour_s%d.png" % i)
 		"fire_done":
 			await _test_hold("firefighter", "fire", 3.8)
 		"heal_done":
@@ -236,6 +302,19 @@ func _run_test(name: String) -> void:
 			print("AFTER patrol cash=", Game.cash, " done=", Game.stats["missions_done"])
 		"capture_done":
 			await _test_hold("gangster", "capture", 9.5)
+
+
+func _walk_forward(sec: float) -> void:
+	Input.action_press("move_forward")
+	await get_tree().create_timer(sec).timeout
+	Input.action_release("move_forward")
+	await get_tree().create_timer(0.25).timeout
+
+
+func _shot_now(path: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	img.save_png(path)
 
 
 func _test_hold(job_id: String, mtype: String, hold_sec: float) -> void:
@@ -262,6 +341,7 @@ func _screenshot_after(path: String, delay: float) -> void:
 	if is_instance_valid(player) and is_instance_valid(player.cam):
 		print("DBG camdir=", -player.cam.global_transform.basis.z, " yaw=", player.rotation.y, " pos=", player.global_position)
 		print("DBG camworld=", player.cam.global_position, " camcurrent=", player.cam.current, " vp=", get_viewport().get_visible_rect().size)
+		print("DBG FPS=", Engine.get_frames_per_second())
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
 	print("SHOT_SAVED: ", path)

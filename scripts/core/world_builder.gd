@@ -14,6 +14,7 @@ var host: Node
 var rng := RandomNumberGenerator.new()
 var building_mats: Array = []
 var street_lights: Array = []
+var kit_buildings: Array = []
 var _mat_cache: Dictionary = {}
 
 
@@ -160,8 +161,6 @@ func _make_places() -> void:
 func _make_one_place(c: Vector3, p: Dictionary) -> void:
 	var w: float = p["size"].x
 	var d: float = p["size"].y
-	var h: float = p["height"]
-	var col: Color = p["color"]
 	var kind: String = p["kind"]
 
 	var g := Node3D.new()
@@ -169,97 +168,12 @@ func _make_one_place(c: Vector3, p: Dictionary) -> void:
 	g.position = c
 	root.add_child(g)
 
-	# 主体（带程序化窗户）
-	var body := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(w, h, d)
-	body.mesh = bm
-	body.material_override = building_material(col)
-	body.position.y = h * 0.5
-	g.add_child(body)
-	solid(g, Vector3(0, h * 0.5, 0), Vector3(w, h, d))
-
-	# 檐口
-	box(g, Vector3(0, h + 0.25, 0), Vector3(w + 0.8, 0.5, d + 0.8), col.darkened(0.25), false, 0.0, 0.8)
-	# 屋顶设备
-	box(g, Vector3(w * 0.25, h + 1.0, -d * 0.2), Vector3(2.4, 1.2, 2.4), Color(0.42, 0.44, 0.46), false)
-	box(g, Vector3(-w * 0.22, h + 0.8, d * 0.15), Vector3(1.6, 0.8, 1.6), Color(0.38, 0.40, 0.42), false)
-
-	# 正门
-	var door_w := 2.6
-	var door_h := 3.2
-	box(g, Vector3(0, door_h * 0.5, d * 0.5 + 0.06), Vector3(door_w, door_h, 0.16), Color(0.10, 0.11, 0.13), false, 0.0, 0.4)
-	box(g, Vector3(0, door_h + 0.18, d * 0.5 + 0.06), Vector3(door_w + 0.7, 0.36, 0.3), col.lightened(0.18), false)
-	# 台阶
-	box(g, Vector3(0, 0.09, d * 0.5 + 0.9), Vector3(door_w + 2.0, 0.18, 1.8), Color(0.55, 0.55, 0.56), false, 0.0, 0.9)
-
-	# 招牌
-	if p["sign"] != "":
-		var sign_col := Color(0.95, 0.95, 0.95)
-		if kind == "police": sign_col = Color(0.55, 0.75, 1.0)
-		elif kind == "fire": sign_col = Color(1.0, 0.62, 0.55)
-		elif kind == "hospital": sign_col = Color(1.0, 0.55, 0.55)
-		elif kind == "diner": sign_col = Color(1.0, 0.80, 0.42)
-		elif kind == "mart": sign_col = Color(0.55, 1.0, 0.75)
-		elif kind == "gang": sign_col = Color(0.75, 0.60, 1.0)
-		elif kind == "garage": sign_col = Color(1.0, 0.92, 0.45)
-		box(g, Vector3(0, h - 1.2, d * 0.5 + 0.12), Vector3(w * 0.62, 1.7, 0.14), Color(0.07, 0.08, 0.10), false, 0.0, 0.35)
-		label3d(g, p["sign"], Vector3(0, h - 1.2, d * 0.5 + 0.22), 96, sign_col)
-
-	# 类型专属装饰
-	match kind:
-		"police":
-			# 蓝色警灯条
-			box(g, Vector3(0, h + 0.9, 0), Vector3(3.2, 0.35, 0.5), Color(0.25, 0.55, 1.0), false, 0.0, 0.2)
-			for i in range(3):
-				box(g, Vector3(-w * 0.5 - 0.4, 1.0 + i * 3.2, d * 0.5 - 1.5), Vector3(0.3, 1.6, 0.3), Color(0.75, 0.78, 0.82), false)
-		"fire":
-			# 卷帘车库门
-			for i in range(2):
-				box(g, Vector3(-w * 0.28 + i * w * 0.56, 2.4, d * 0.5 + 0.1), Vector3(6.0, 4.6, 0.2), Color(0.62, 0.20, 0.18), false, 0.0, 0.55)
-			box(g, Vector3(0, h + 0.9, 0), Vector3(2.6, 0.3, 0.4), Color(1.0, 0.35, 0.25), false, 0.0, 0.2)
-		"hospital":
-			# 红十字
-			box(g, Vector3(0, h - 4.0, d * 0.5 + 0.14), Vector3(0.6, 3.0, 0.1), Color(0.92, 0.30, 0.32), false, 0.0, 0.5)
-			box(g, Vector3(0, h - 4.0, d * 0.5 + 0.14), Vector3(3.0, 0.6, 0.1), Color(0.92, 0.30, 0.32), false, 0.0, 0.5)
-		"diner":
-			# 遮阳篷（水平面 + 前缘竖板）
-			for i in range(6):
-				var ax := -w * 0.42 + i * (w * 0.84 / 5.0)
-				var ac := Color(0.90, 0.32, 0.28) if i % 2 == 0 else Color(0.95, 0.93, 0.88)
-				box(g, Vector3(ax, 3.42, d * 0.5 + 1.15), Vector3(w * 0.84 / 5.0, 0.10, 2.0), ac, false, 0.0, 0.6)
-				box(g, Vector3(ax, 3.12, d * 0.5 + 2.12), Vector3(w * 0.84 / 5.0, 0.5, 0.09), ac, false, 0.0, 0.6)
-		"mart":
-			# 霓虹条
-			box(g, Vector3(0, 3.9, d * 0.5 + 0.14), Vector3(w * 0.7, 0.22, 0.1), Color(0.35, 1.0, 0.62), false, 0.0, 0.2)
-			for i in range(4):
-				box(g, Vector3(-3.0 + i * 2.0, 1.2, d * 0.5 + 1.6), Vector3(0.5, 1.2, 0.5), Color(0.5, 0.55, 0.5), false)
-		"garage":
-			# 展示橱窗
-			box(g, Vector3(0, 2.2, d * 0.5 + 0.12), Vector3(w * 0.8, 3.4, 0.12), Color(0.12, 0.16, 0.22), false, 0.0, 0.1)
-			box(g, Vector3(-w * 0.2, 3.9, d * 0.5 + 0.2), Vector3(w * 0.5, 0.9, 0.1), Color(1.0, 0.85, 0.30), false, 0.0, 0.3)
-		"bank":
-			# 罗马柱
-			for i in range(4):
-				var cx := -w * 0.36 + i * (w * 0.72 / 3.0)
-				box(g, Vector3(cx, 3.0, d * 0.5 + 1.4), Vector3(1.1, 6.0, 1.1), Color(0.82, 0.80, 0.74), false, 0.0, 0.7)
-			box(g, Vector3(0, 6.4, d * 0.5 + 1.4), Vector3(w * 0.8, 0.7, 1.4), Color(0.75, 0.73, 0.68), false, 0.0, 0.7)
-		"gang":
-			# 铁皮与油桶
-			for i in range(5):
-				box(g, Vector3(-w * 0.4 + i * w * 0.2, h * 0.5, d * 0.5 + 0.08), Vector3(0.18, h, 0.1), Color(0.18, 0.16, 0.20), false)
-			for i in range(3):
-				var bp := Vector3(w * 0.5 + 1.6 + i * 1.3, 0.55, d * 0.5 - 1.0)
-				var bc := Color(0.72, 0.32, 0.22) if i % 2 == 0 else Color(0.30, 0.42, 0.36)
-				var cyl := MeshInstance3D.new()
-				var cm := CylinderMesh.new()
-				cm.top_radius = 0.45
-				cm.bottom_radius = 0.45
-				cm.height = 1.1
-				cyl.mesh = cm
-				cyl.material_override = mat(bc, 0.6, 0.4)
-				cyl.position = bp
-				g.add_child(cyl)
+	# 用 Downtown City MegaKit 模块搭出可进入的多层建筑（外观 / 楼板 / 楼梯 / 内饰）
+	var kb := KitBuilding.new()
+	kb.setup(p, host, rng)
+	g.add_child(kb)
+	kb.build_to(kb)
+	kit_buildings.append(kb)
 
 	# 门口交互点
 	var door_pos := c + Vector3(0, 0, d * 0.5 + 2.2)
@@ -278,7 +192,6 @@ func _make_one_place(c: Vector3, p: Dictionary) -> void:
 		"gang": prompt = "仓库 · 帮派事务"; cb = Callable(host, "open_gang_panel")
 	if cb.is_valid():
 		Interactable.create(g, Vector3(0, 1.4, d * 0.5 + 2.2), Vector3(3.4, 2.8, 1.6), prompt, cb)
-		# 地面引导标记
 		box(g, Vector3(0, 0.012, d * 0.5 + 2.2), Vector3(2.4, 0.02, 2.4), Color(0.20, 0.42, 0.68), false, 0.0, 0.7)
 
 
@@ -542,3 +455,6 @@ func set_night(amount: float) -> void:
 	for l in street_lights:
 		if is_instance_valid(l):
 			l.light_energy = 6.0 * amount
+	for kb in kit_buildings:
+		if is_instance_valid(kb):
+			kb.set_night(amount)
