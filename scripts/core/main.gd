@@ -230,6 +230,51 @@ func _run_test(name: String) -> void:
 			await get_tree().create_timer(2.0).timeout
 			await _shot_now("D:/Sim Life/shots/npc_show2.png")
 			print("NPC_SHOW fps=", Engine.get_frames_per_second(), " npcs=", npc_root.get_child_count())
+		"gunquiz":
+			# 武器购买：平板武器页 → 答题 → 通过后扣款购枪
+			Game.set_job("unemployed")
+			Game.add_cash(6000, "")
+			var rng := RandomNumberGenerator.new()
+			rng.seed = 20261101
+			var qs: Array = WeaponQuiz.pick(3, rng)
+			Game.tablet.open("weapons")
+			await get_tree().create_timer(0.4).timeout
+			await _shot_now("D:/Sim Life/shots/gun_page.png")
+			Game.tablet._open_weapon_quiz("m4", qs)
+			await get_tree().create_timer(0.5).timeout
+			await _shot_now("D:/Sim Life/shots/gun_quiz.png")
+			var qp := _find_quiz(Game.tablet)
+			if qp != null:
+				for i in range(qs.size()):
+					qp.choose_option(int(qs[i]["answer"]))
+					await get_tree().create_timer(0.15).timeout
+					qp.advance()
+					await get_tree().create_timer(0.2).timeout
+				await get_tree().create_timer(0.3).timeout
+				await _shot_now("D:/Sim Life/shots/gun_quiz_result.png")
+				qp.advance()
+				await get_tree().create_timer(0.4).timeout
+			print("GUNQUIZ owned=", Game.owns_weapon("m4"), " cash=", Game.cash, " weapon=", Game.weapon)
+			await _shot_now("D:/Sim Life/shots/gun_bought.png")
+			get_tree().quit()
+		"gunfire":
+			Game.set_job("police")
+			var gc := Data.cell_center(Vector2i(1, 1))
+			player.teleport(gc + Vector3(0, 0.3, 10.0))
+			player.rotation.y = 0.0
+			var npc2 := NPC.spawn(npc_root, gc + Vector3(0, 0.2, 4.0), "pedestrian", Color(0.5, 0.5, 0.5))
+			npc2.rotation.y = PI
+			await get_tree().create_timer(0.6).timeout
+			print("GUNFIRE npc_pos=", npc2.global_position, " layer=", npc2.collision_layer, " alive=", npc2.alive)
+			var hp0: float = npc2.health
+			for i in range(6):
+				Input.action_press("shoot")
+				await get_tree().create_timer(0.22).timeout
+				Input.action_release("shoot")
+				await get_tree().create_timer(0.06).timeout
+			await _shot_now("D:/Sim Life/shots/gun_fire.png")
+			print("GUNFIRE hp0=", hp0, " hp=", npc2.health, " alive=", npc2.alive, " mag=", player.weapon_sys.mag, " heat=", Game.heat)
+			get_tree().quit()
 		"climb2":
 			# 逐跑验证每一跑楼梯（警察局 3 层 + 医院 4 层）
 			Game.set_job("police")
@@ -323,6 +368,16 @@ func _walk_forward(sec: float) -> void:
 	await get_tree().create_timer(sec).timeout
 	Input.action_release("move_forward")
 	await get_tree().create_timer(0.25).timeout
+
+
+func _find_quiz(n: Node) -> QuizPanel:
+	if n is QuizPanel:
+		return n
+	for c in n.get_children():
+		var r := _find_quiz(c)
+		if r != null:
+			return r
+	return null
 
 
 func _shot_now(path: String) -> void:

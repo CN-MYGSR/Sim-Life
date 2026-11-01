@@ -9,6 +9,7 @@ const PAGES := [
 	{"id": "property", "name": "房产", "hint": "购买与装修"},
 	{"id": "shops", "name": "店铺", "hint": "租赁使用权"},
 	{"id": "vehicles", "name": "车辆", "hint": "购买与改装"},
+	{"id": "weapons", "name": "武器", "hint": "购枪与装备"},
 	{"id": "gang", "name": "帮派", "hint": "加入与接活"},
 	{"id": "stats", "name": "档案", "hint": "生涯统计"},
 ]
@@ -35,6 +36,7 @@ func _ready() -> void:
 	Game.shops_changed.connect(_on_data_changed)
 	Game.properties_changed.connect(_on_data_changed)
 	Game.vehicles_changed.connect(_on_data_changed)
+	Game.weapons_changed.connect(_on_data_changed)
 
 
 func _on_data_changed() -> void:
@@ -243,6 +245,7 @@ func _rebuild() -> void:
 		"property": _page_property()
 		"shops": _page_shops()
 		"vehicles": _page_vehicles()
+		"weapons": _page_weapons()
 		"gang": _page_gang()
 		"stats": _page_stats()
 
@@ -785,6 +788,119 @@ func _tuning_panel(v: Dictionary, uid: int) -> void:
 			_rebuild())
 		prow.add_child(pb)
 	vbox.add_child(prow)
+
+
+# ═══════════════ 武器页 ═══════════════
+func _page_weapons() -> void:
+	_title("武器", "购枪前必须通过「购枪资格测验」（答对全部 3 题）。Glock 17 仅警察免费配发。")
+	if Game.job == "police":
+		var tip := _card(Color(0.07, 0.11, 0.13))
+		var tv := VBoxContainer.new()
+		tv.add_theme_constant_override("separation", 4)
+		tip.add_child(tv)
+		tv.add_child(_label("警察配发", 14, Data.C_TEAL))
+		tv.add_child(_label("入职警察后自动获得 Glock 17；也可以自费购买 M4 / AK / MAC-10（同样需要答题）。", 12, Data.C_DIM, true))
+	else:
+		var tip2 := _card(Color(0.09, 0.08, 0.06))
+		var tv2 := VBoxContainer.new()
+		tv2.add_theme_constant_override("separation", 4)
+		tip2.add_child(tv2)
+		tv2.add_child(_label("购枪须知", 14, Data.C_GOLD))
+		tv2.add_child(_label("任何人都可以购买 M4 / AK-47 / MAC-10，但必须先通过购枪资格测验。Glock 17 不对外出售。", 12, Data.C_DIM, true))
+
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 4)
+	content.add_child(gap)
+	content.add_child(_label("柜台目录", 14, Data.C_DIM))
+
+	for w in Data.WEAPONS:
+		var wid: String = str(w["id"])
+		var card := _card()
+		var h := _row(12)
+		var stripe := ColorRect.new()
+		stripe.color = Color(0.85, 0.72, 0.38) if wid == "glock" else Color(0.42, 0.47, 0.52)
+		stripe.custom_minimum_size = Vector2(6, 0)
+		h.add_child(stripe)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 3)
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(v)
+		v.add_child(_label("%s　·　%s" % [str(w["name"]), str(w["kind"])], 17))
+		v.add_child(_label("伤害 %.0f　射速 %.2fs　弹匣 %d%s" % [float(w["damage"]), float(w["rate"]), int(w["mag"]), "　全自动" if bool(w["auto"]) else "　半自动"], 12, Data.C_DIM))
+		var d := _label(str(w["desc"]), 12, Data.C_DIM, true)
+		d.custom_minimum_size = Vector2(480, 0)
+		v.add_child(d)
+		if bool(w["auto"]):
+			v.add_child(_label("提示：装备后按住左键连续射击；R 换弹；1-4 快速切枪。", 11, Data.C_DIM))
+		else:
+			v.add_child(_label("提示：装备后左键射击；R 换弹；1-4 快速切枪。", 11, Data.C_DIM))
+
+		# 状态 + 操作
+		var right := VBoxContainer.new()
+		right.add_theme_constant_override("separation", 4)
+		right.custom_minimum_size = Vector2(150, 0)
+		h.add_child(right)
+		var owned := Game.owns_weapon(wid)
+		var equipped := Game.weapon == wid
+		var price := int(w["price"])
+		if owned:
+			right.add_child(_label("已持有", 13, Data.C_TEAL))
+		elif wid == "glock":
+			right.add_child(_label("警察配发", 13, Data.C_GOLD))
+		else:
+			right.add_child(_label("$%s" % _fmt(price), 17, Data.C_GOLD))
+		var police_only := wid == "glock"
+		if owned:
+			var eb := _btn("收起" if equipped else "装备", func():
+				if equipped:
+					Game.holster_weapon()
+				else:
+					Game.equip_weapon(wid)
+				_rebuild(), "ok", 96)
+			right.add_child(eb)
+		elif police_only:
+			right.add_child(_label("仅警察配发", 12, Data.C_DIM))
+		else:
+			var buy := _btn("购枪（答题）", Callable(), "gold", 120)
+			buy.disabled = Game.cash < price
+			buy.pressed.connect(func(): _open_weapon_quiz(wid))
+			right.add_child(buy)
+		card.add_child(h)
+
+
+func _open_weapon_quiz(wid: String, questions_override: Array = []) -> void:
+	var w := Game.weapon_info(wid)
+	if w.is_empty():
+		return
+	var quiz_script = load("res://scripts/core/weapon_quiz.gd")
+	var panel_script = load("res://scripts/ui/quiz_panel.gd")
+	if quiz_script == null or panel_script == null:
+		Game.toast.emit("答题系统未就绪，无法购枪", "error")
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var questions: Array = questions_override
+	if questions.is_empty():
+		questions = quiz_script.pick(3, rng)
+	var layer := CanvasLayer.new()
+	layer.layer = 45
+	add_child(layer)
+	var qp = panel_script.new()
+	layer.add_child(qp)
+	qp.question_provider = func():
+		var r := RandomNumberGenerator.new()
+		r.randomize()
+		return quiz_script.pick(3, r)
+	qp.finished.connect(func(passed: bool):
+		layer.queue_free()
+		if passed:
+			Game.buy_weapon(wid)
+		else:
+			Game.toast.emit("测验未通过，购枪取消", "error"))
+	qp.closed.connect(func():
+		if is_instance_valid(layer) and not layer.is_queued_for_deletion():
+			layer.queue_free())
+	qp.open(questions)
 
 
 # ═══════════════ 帮派页 ═══════════════

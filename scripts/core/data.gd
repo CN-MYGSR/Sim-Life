@@ -195,6 +195,28 @@ const PAINTS := [
 	{"name": "霓虹紫", "color": Color(0.62, 0.32, 0.85), "cost": 900},
 ]
 
+# ─────────────────────────── 武器 ───────────────────────────
+## 购买民用武器需要先通过购枪资格答题；Glock 17 仅警察免费配发
+const WEAPONS := [
+	{"id": "glock", "name": "Glock 17", "kind": "手枪", "price": 0, "free_for": "police",
+		"damage": 22.0, "rate": 0.18, "auto": false, "mag": 17, "spread": 0.006, "range": 110.0,
+		"color": Color(0.30, 0.32, 0.35),
+		"desc": "警用制式手枪，警察入职免费配发，弹匣 17 发。"},
+	{"id": "m4", "name": "M4 卡宾枪", "kind": "步枪", "price": 4200, "free_for": "",
+		"damage": 30.0, "rate": 0.095, "auto": true, "mag": 30, "spread": 0.011, "range": 180.0,
+		"color": Color(0.26, 0.28, 0.30),
+		"desc": "全自动卡宾枪，射速高、后坐小。需要购枪资格。"},
+	{"id": "ak", "name": "AK-47", "kind": "步枪", "price": 3600, "free_for": "",
+		"damage": 38.0, "rate": 0.115, "auto": true, "mag": 30, "spread": 0.017, "range": 170.0,
+		"color": Color(0.36, 0.24, 0.16),
+		"desc": "威力大、后坐明显的老式突击步枪。需要购枪资格。"},
+	{"id": "mac10", "name": "MAC-10", "kind": "冲锋枪", "price": 2400, "free_for": "",
+		"damage": 18.0, "rate": 0.075, "auto": true, "mag": 30, "spread": 0.021, "range": 90.0,
+		"color": Color(0.22, 0.23, 0.25),
+		"desc": "紧凑型冲锋枪，射速极快但不精准。需要购枪资格。"},
+]
+const WEAPON_ORDER := ["glock", "m4", "ak", "mac10"]
+
 # ─────────────────────────── 家具（装修） ───────────────────────────
 ## parts: 若干盒子的 {size, pos, color?} 组合，pos 为相对家具原点的偏移
 const FURNITURE := [

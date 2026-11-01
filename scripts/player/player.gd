@@ -13,6 +13,7 @@ const ACCEL_AIR := 3.0
 var cam: Camera3D
 var head: Node3D
 var torch: OmniLight3D
+var weapon_sys: WeaponSystem
 var shape: CollisionShape3D
 var cap: CapsuleShape3D
 
@@ -68,7 +69,16 @@ func _ready() -> void:
 	torch.position = Vector3(0, 0.1, -0.6)
 	cam.add_child(torch)
 
+	# 第一人称武器
+	weapon_sys = WeaponSystem.new()
+	cam.add_child(weapon_sys)
+
 	gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 18.0))
+
+
+func set_weapon_visual(id: String) -> void:
+	if is_instance_valid(weapon_sys):
+		weapon_sys.set_weapon(id)
 
 
 func _unhandled_input(event: InputEvent) -> void:

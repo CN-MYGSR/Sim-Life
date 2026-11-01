@@ -10,6 +10,7 @@ signal missions_changed
 signal properties_changed
 signal vehicles_changed
 signal shops_changed
+signal weapons_changed
 signal toast(text: String, kind: String)
 
 # ─────────────── 运行时状态 ───────────────
@@ -28,6 +29,8 @@ var vehicles: Array = []               # [{"uid":int,"type":String,"engine":int,
 var active_vehicle: int = -1
 var shops: Dictionary = {}             # shop_id -> expire_day
 var missions: Array = []               # [{id,type,title,reward,target,progress,need,meta}]
+var weapons_owned: Dictionary = {}     # weapon_id -> true
+var weapon: String = ""                # 当前装备的武器 id
 var stats: Dictionary = {"missions_done": 0, "earned": 0, "arrests": 0, "fires": 0, "heals": 0}
 
 # ─────────────── 场景引用 ───────────────
@@ -78,6 +81,18 @@ func _setup_input() -> void:
 	_bind("decorate", [KEY_B])
 	_bind("horn", [KEY_H])
 	_bind("map_zoom", [KEY_M])
+	_bind("reload", [KEY_R])
+	for i in range(4):
+		_bind("weapon_%d" % (i + 1), [KEY_1 + i])
+	_bind_mouse("shoot", MOUSE_BUTTON_LEFT)
+
+
+func _bind_mouse(action: String, button: MouseButton) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action, 0.2)
+	var ev := InputEventMouseButton.new()
+	ev.button_index = button
+	InputMap.action_add_event(action, ev)
 
 
 func _bind(action: String, keys: Array) -> void:
@@ -247,7 +262,80 @@ func set_job(id: String) -> bool:
 	job = id
 	job_changed.emit()
 	toast.emit("职业已变更为「%s」" % info.get("name", ""), "ok")
+	if id == "police":
+		_grant_police_loadout()
 	return true
+
+
+# ─────────────── 武器 ───────────────
+func _grant_police_loadout() -> void:
+	if not weapons_owned.has("glock"):
+		weapons_owned["glock"] = true
+		weapons_changed.emit()
+		toast.emit("警局配发：Glock 17（免费）", "ok")
+		if weapon == "":
+			equip_weapon("glock")
+
+
+func weapon_info(id: String) -> Dictionary:
+	return _find(Data.WEAPONS, id)
+
+
+func owns_weapon(id: String) -> bool:
+	return weapons_owned.has(id)
+
+
+func own_weapon_list() -> Array:
+	var out: Array = []
+	for id in Data.WEAPON_ORDER:
+		if weapons_owned.has(id):
+			out.append(id)
+	return out
+
+
+func give_weapon(id: String) -> bool:
+	if weapon_info(id).is_empty() or weapons_owned.has(id):
+		return false
+	weapons_owned[id] = true
+	weapons_changed.emit()
+	return true
+
+
+## 购买（答题校验由界面层负责，这里只校验钱与重复购买）
+func buy_weapon(id: String) -> bool:
+	var w := weapon_info(id)
+	if w.is_empty():
+		return false
+	if weapons_owned.has(id):
+		toast.emit("你已经拥有 %s 了" % w["name"], "warn")
+		return false
+	if id == "glock":
+		toast.emit("Glock 17 只对警察免费配发", "error")
+		return false
+	var price := int(w["price"])
+	if not try_spend(price, "购买 · %s" % w["name"]):
+		return false
+	weapons_owned[id] = true
+	weapons_changed.emit()
+	toast.emit("已购入 %s" % w["name"], "ok")
+	equip_weapon(id)
+	return true
+
+
+func equip_weapon(id: String) -> void:
+	if not weapons_owned.has(id):
+		return
+	weapon = id
+	weapons_changed.emit()
+	if is_instance_valid(player):
+		player.set_weapon_visual(id)
+
+
+func holster_weapon() -> void:
+	weapon = ""
+	weapons_changed.emit()
+	if is_instance_valid(player):
+		player.set_weapon_visual("")
 
 
 func _shop_name(id: String) -> String:
@@ -579,6 +667,8 @@ func reset_new_game() -> void:
 	clock = Data.START_HOUR / 24.0 * Data.DAY_LENGTH
 	properties.clear()
 	vehicles.clear()
+	weapons_owned.clear()
+	weapon = ""
 	active_vehicle = -1
 	shops.clear()
 	missions.clear()

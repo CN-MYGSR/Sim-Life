@@ -17,6 +17,9 @@ var hold_bar: ProgressBar
 var stamina_bar: ProgressBar
 var health_bar: ProgressBar
 var toast_box: VBoxContainer
+var weapon_panel: PanelContainer
+var weapon_label: Label
+var ammo_label: Label
 var _prompt_text: String = ""
 var _t: float = 0.0
 
@@ -33,6 +36,27 @@ func _ready() -> void:
 	_refresh_job()
 	_refresh_heat()
 	_update_time()
+	_init_weapon()
+
+
+func _init_weapon() -> void:
+	if is_instance_valid(Game.player) and is_instance_valid(Game.player.weapon_sys):
+		var ws = Game.player.weapon_sys
+		if ws.weapon_id != "":
+			set_weapon_info(str(ws.data.get("name", "")), ws.mag, ws.mag_cap)
+			return
+	set_weapon_info("", 0, 0)
+
+
+func set_weapon_info(w_name: String, mag: int, cap: int) -> void:
+	if weapon_panel == null:
+		return
+	if w_name == "":
+		weapon_panel.visible = false
+		return
+	weapon_panel.visible = true
+	weapon_label.text = w_name
+	ammo_label.text = "%d / %d" % [mag, cap]
 
 
 func _build() -> void:
@@ -119,6 +143,42 @@ func _build() -> void:
 	bl.add_child(health_bar)
 	stamina_bar = _make_bar(Color(0.35, 0.82, 0.62), "体力")
 	bl.add_child(stamina_bar)
+
+	# ── 右下：武器 / 弹药 ──
+	weapon_panel = PanelContainer.new()
+	var ws := StyleBoxFlat.new()
+	ws.bg_color = Color(0.04, 0.05, 0.07, 0.78)
+	ws.set_corner_radius_all(10)
+	ws.border_color = Color(0.85, 0.72, 0.38, 0.55)
+	ws.set_border_width_all(1)
+	ws.content_margin_left = 16
+	ws.content_margin_right = 16
+	ws.content_margin_top = 8
+	ws.content_margin_bottom = 8
+	weapon_panel.add_theme_stylebox_override("panel", ws)
+	weapon_panel.anchor_left = 1.0
+	weapon_panel.anchor_top = 1.0
+	weapon_panel.anchor_right = 1.0
+	weapon_panel.anchor_bottom = 1.0
+	weapon_panel.offset_left = -250
+	weapon_panel.offset_top = -92
+	weapon_panel.offset_right = -26
+	weapon_panel.offset_bottom = -26
+	weapon_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapon_panel.visible = false
+	root.add_child(weapon_panel)
+	var wv := VBoxContainer.new()
+	wv.add_theme_constant_override("separation", 0)
+	weapon_panel.add_child(wv)
+	weapon_label = Label.new()
+	weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	weapon_label.add_theme_font_size_override("font_size", 15)
+	wv.add_child(weapon_label)
+	ammo_label = Label.new()
+	ammo_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ammo_label.add_theme_font_size_override("font_size", 24)
+	ammo_label.add_theme_color_override("font_color", Data.C_GOLD)
+	wv.add_child(ammo_label)
 
 	# ── 底部中央：交互提示 ──
 	prompt_panel = PanelContainer.new()

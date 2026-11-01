@@ -11,6 +11,7 @@ var target_pos: Vector3 = Vector3.ZERO
 var flee_from: Node3D = null
 var fleeing: bool = false
 var alive: bool = true
+var health: float = 100.0
 
 var _t: float = 0.0
 var _wander: float = 0.0
@@ -130,6 +131,42 @@ func _physics_process(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, want, delta * 8.0)
 
 	_update_anim()
+
+
+func take_damage(amount: float) -> void:
+	if not alive:
+		return
+	health -= amount
+	if health <= 0.0:
+		_die()
+
+
+func _die() -> void:
+	if not alive:
+		return
+	alive = false
+	velocity = Vector3.ZERO
+	set_physics_process(false)
+	collision_layer = 0
+	collision_mask = 0
+	for c in get_children():
+		if c is CollisionShape3D:
+			(c as CollisionShape3D).disabled = true
+	if _actor != null:
+		_actor.play_pose("Death", 1.0)
+		_actor.position.y = 0.15
+	if kind == "criminal":
+		for m in Game.missions.duplicate():
+			if str(m["type"]) == "arrest":
+				Game.complete_mission(int(m["id"]))
+				break
+	elif kind == "pedestrian":
+		Game.add_heat(0.6)
+		Game.toast.emit("你袭击了平民，通缉度上升", "error")
+	else:
+		Game.add_heat(0.3)
+	await get_tree().create_timer(5.0).timeout
+	queue_free()
 
 
 func _update_anim() -> void:
