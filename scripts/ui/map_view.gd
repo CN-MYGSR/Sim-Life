@@ -35,6 +35,19 @@ func _scale() -> float:
 	return s / (Data.CITY_HALF * 2.0)
 
 
+func _get_tooltip(at_position: Vector2) -> String:
+	for property in Data.PROPERTIES:
+		var center: Vector3 = Data.cell_center(property["cell"]) + property["offset"]
+		if w2s(center).distance_to(at_position) < 9:
+			return str(property["name"]) + (" · 已购" if Game.owns_property(property["id"]) else " · $%d" % int(property["price"]))
+	for place in Data.PLACES:
+		var center := w2s(Data.cell_center(place["cell"]))
+		var size: Vector2 = place["size"] * _scale()
+		if Rect2(center - size * 0.5, size).has_point(at_position):
+			return str(place["name"])
+	return ""
+
+
 func _draw() -> void:
 	var font := Game.get_font()
 	var sc := _scale()
@@ -106,7 +119,12 @@ func _draw() -> void:
 
 	# 任务目标
 	for m in Game.missions:
-		var tps: Array = m.get("targets", [m["target"]])
+		var tps: Array = [m["target"]]
+		if m.has("targets"):
+			tps = []
+			for point_index in range(m["targets"].size()):
+				if point_index not in m["meta"].get("visited", []):
+					tps.append(m["targets"][point_index])
 		var col := Color(0.95, 0.35, 0.40) if m["type"] in ["arrest", "rob", "fire"] else Data.C_TEAL
 		var k := fmod(_pulse, 1.0)
 		for tp in tps:

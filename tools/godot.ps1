@@ -8,5 +8,16 @@ if (-not $editor) {
 if (-not (Test-Path -LiteralPath $editor -PathType Leaf)) {
     throw 'Set SIM_LIFE_GODOT to the official Godot 4.7.2 console executable.'
 }
-& $editor --path $projectRoot @args
+$nativeArgs = @($args)
+# PowerShell consumes an unquoted -- when invoking a script. Recover the boundary
+# for this game's documented options; an explicitly quoted '--' passes unchanged.
+if (-not ($nativeArgs -contains '--')) {
+    for ($gameArgIndex = 0; $gameArgIndex -lt $nativeArgs.Count; $gameArgIndex++) {
+        if ($nativeArgs[$gameArgIndex] -match '^--(seed|output|ssao|shot|delay|at|job|page|time|test)=' -or $nativeArgs[$gameArgIndex] -in @('--no-save','--topview')) {
+            $nativeArgs = @($nativeArgs | Select-Object -First $gameArgIndex) + @('--') + @($nativeArgs | Select-Object -Skip $gameArgIndex)
+            break
+        }
+    }
+}
+& $editor --path $projectRoot @nativeArgs
 exit $LASTEXITCODE

@@ -12,6 +12,7 @@ func _run() -> void:
 		get_tree().quit(1)
 		return
 	Game.reset_new_game()
+	Game.persistence_enabled = false
 	Game.set_process(false)
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(Vector2i(1280, 720))
@@ -42,9 +43,10 @@ func _run() -> void:
 	world._update_sky()
 	world.player.teleport(police + Vector3(0, 0.1, 18))
 	world.player.rotation.y = PI
+	world.player.torch.light_energy = 2.6
 	await _shot("city_night")
 	print("VISUAL_SMOKE_DONE")
-	get_tree().quit()
+	world._quit_game()
 
 func _shot(label: String) -> void:
 	await get_tree().create_timer(1.0).timeout

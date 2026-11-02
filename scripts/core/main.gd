@@ -22,6 +22,8 @@ var _decor_prop: String = ""
 var _debug_mode: bool = false
 var _autosave_t := 0.0
 var _last_sky_day_f := -1.0
+var _npc_lod_t := 0.0
+var _quitting := false
 
 # 店铺经营
 var _biz_active: bool = false
@@ -39,7 +41,7 @@ const PED_COLORS := [
 
 func _ready() -> void:
 	Game.world = self
-	randomize()
+	# Godot initializes the global RNG once; keep externally supplied seeds intact.
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--seed="):
 			seed(int(arg.substr(7)))
@@ -445,6 +447,17 @@ func _setup_env() -> void:
 	env.ambient_light_energy = 1.0
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.ssao_enabled = true
+	var ssao_mode: String = str(ProjectSettings.get_setting("sim_life/graphics/ssao_mode", "auto"))
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--ssao="):
+			ssao_mode = arg.substr(7)
+	var adapter := RenderingServer.get_video_adapter_name().to_lower()
+	# Verified on this legacy Vulkan adapter: SSAO turns roads/interiors completely
+	# black even at low intensity. Keep Forward+, shadows and AA; bypass only this
+	# broken effect on the observed adapter. Other GPUs retain the original effect.
+	env.ssao_enabled = ssao_mode == "on" or (ssao_mode != "off" and not adapter.contains("firepro w2100"))
+	if not env.ssao_enabled and ssao_mode == "auto":
+		print("GRAPHICS: FirePro W2100 SSAO compatibility applied; --ssao=on overrides it")
 	env.ssao_radius = 1.4
 	env.glow_enabled = true
 	env.glow_intensity = 0.35
@@ -465,6 +478,10 @@ func _setup_env() -> void:
 
 
 func _process(delta: float) -> void:
+	_npc_lod_t -= delta
+	if _npc_lod_t <= 0:
+		_npc_lod_t = 0.5
+		_update_ambient_lod()
 	if Game.persistence_enabled:
 		_autosave_t += delta
 		if _autosave_t >= 60.0:
@@ -606,7 +623,26 @@ func spawn_ambient_npcs() -> void:
 		var cell := Vector2i(randi() % Data.GRID, randi() % Data.GRID)
 		var pos := Data.sidewalk_point(cell, i % 4) + Vector3(0, 0.15, 0)
 		var col: Color = PED_COLORS[randi() % PED_COLORS.size()]
-		NPC.spawn(npc_root, pos, "pedestrian", col)
+		var pedestrian := NPC.spawn(npc_root, pos, "pedestrian", col)
+		pedestrian.add_to_group("ambient_pedestrian")
+
+
+func _update_ambient_lod() -> void:
+	if not is_instance_valid(player):
+		return
+	for npc in npc_root.get_children():
+		if not npc is NPC or not npc.alive or not npc.is_in_group("ambient_pedestrian"):
+			continue
+		# Hysteresis prevents repeated activation at a boundary. Mission NPCs and
+		# expiring shop customers are deliberately excluded from this sleep policy.
+		var distance := 160.0 if npc.is_physics_processing() else 140.0
+		var nearby: bool = npc.global_position.distance_squared_to(player.global_position) < distance * distance
+		if nearby != npc.is_physics_processing():
+			npc.set_physics_process(nearby)
+			if not nearby:
+				npc.velocity = Vector3.ZERO
+				if is_instance_valid(npc._actor.anim_player):
+					npc._actor.anim_player.active = false
 
 
 # ═══════════════ 车辆 ═══════════════
@@ -814,8 +850,14 @@ func _load_saved_game() -> void:
 
 
 func _quit_game() -> void:
-	if not Game.persistence_enabled or Game.save_game():
-		get_tree().quit()
+	if _quitting or (Game.persistence_enabled and not Game.save_game()):
+		return
+	_quitting = true
+	get_tree().paused = true
+	GameAudio.shutdown()
+	# Let the audio mixer release looping WAV playback before server teardown.
+	await get_tree().create_timer(0.12, true).timeout
+	get_tree().quit()
 
 
 func _notification(what: int) -> void:

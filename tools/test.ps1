@@ -4,7 +4,7 @@ $logs = Join-Path $projectRoot '.artifacts'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $cases = @(
     @{ Name='import'; Args=@('--headless','--editor','--import','--quit') },
-    @{ Name='project-audit'; Marker='PROJECT_AUDIT: .* scripts/scenes, 0 failures'; Args=@('--headless','--quit-after','300','--scene','res://tests/project_audit.tscn','--','--no-save') },
+    @{ Name='project-audit'; Marker='PROJECT_AUDIT: .* scripts/scenes/resources, 0 failures'; Args=@('--headless','--quit-after','300','--scene','res://tests/project_audit.tscn','--','--no-save') },
     @{ Name='regression'; Marker='REGRESSION: .* checks, 0 failures'; Args=@('--headless','--quit-after','3600','--scene','res://tests/regression.tscn','--','--seed=20261102','--no-save') },
     @{ Name='quiz'; Marker='QUIZ_DEMO_DONE fail=0'; Args=@('--headless','--quit-after','3600','--scene','res://tests/quiz_demo.tscn','--','--no-save') },
     @{ Name='gameplay-flow'; Marker='GAMEPLAY_FLOW: .* checks, 0 failures'; Args=@('--headless','--fixed-fps','60','--quit-after','5000','--scene','res://tests/gameplay_flow.tscn','--','--seed=20261102','--no-save') },

@@ -13,6 +13,9 @@ var output := "res://.artifacts/benchmark.json"
 var warmup_end := 0
 
 func _ready() -> void:
+	if Game.get("persistence_enabled") != null:
+		Game.set("persistence_enabled", false)
+	Game.reset_new_game()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--output="):
 			output = arg.substr(9)
@@ -41,6 +44,10 @@ func _process(_delta: float) -> void:
 		physics_ms.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 	last_tick = now
 	if samples.size() == 600:
+		var active_npcs := 0
+		for npc in game_scene.npc_root.get_children():
+			if npc.is_physics_processing():
+				active_npcs += 1
 		var sorted := samples.duplicate()
 		sorted.sort()
 		var result := {
@@ -57,6 +64,8 @@ func _process(_delta: float) -> void:
 			"memory_static_bytes": Performance.get_monitor(Performance.MEMORY_STATIC),
 			"video_memory_bytes": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED),
 			"gpu": RenderingServer.get_video_adapter_name(),
+			"ssao_enabled": game_scene.env.ssao_enabled,
+			"npc_physics_active": active_npcs,
 			"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			"rendered_objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 			"rendered_primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
@@ -74,6 +83,10 @@ func _process(_delta: float) -> void:
 		if DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png(output.get_basename() + ".png")
+		var game_audio := get_node_or_null("/root/GameAudio")
+		if game_audio != null and game_audio.has_method("shutdown"):
+			game_audio.shutdown()
+			await get_tree().create_timer(0.12, true).timeout
 		get_tree().quit()
 
 func _mean(values: Array[float]) -> float:

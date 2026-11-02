@@ -641,6 +641,11 @@ func mission_progress(mid: int, amount: float) -> void:
 		if float(m["progress"]) >= float(m["need"]):
 			_complete_mission(m)
 		else:
+			if m["type"] == "patrol":
+				for point_index in range(m["targets"].size()):
+					if point_index not in m["meta"].get("visited", []):
+						m["target"] = m["targets"][point_index]
+						break
 			missions_changed.emit()
 		return
 

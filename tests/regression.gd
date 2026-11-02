@@ -72,6 +72,15 @@ func _run() -> void:
 		occupied[property["cell"]] = true
 	expect(Data.GRID >= 6 and occupied.size() == Data.GRID * Data.GRID, "all 36 city blocks have usable places or homes")
 	expect(Game.places.has("post") and Game.places.has("east_park"), "new building and park destinations registered")
+	var pedestrian: NPC = world.npc_root.get_child(0)
+	var original_player: Vector3 = world.player.global_position
+	pedestrian.global_position = Data.sidewalk_point(Vector2i(5, 5), 2)
+	world._update_ambient_lod()
+	expect(not pedestrian.is_physics_processing(), "distant ambient pedestrian sleeps without deletion")
+	world.player.teleport(pedestrian.global_position + Vector3(0, 0.2, 3))
+	world._update_ambient_lod()
+	expect(pedestrian.is_physics_processing() and pedestrian.alive, "ambient pedestrian wakes before player arrives")
+	world.player.teleport(original_player)
 	expect(GameAudio.sounds["shot"].data.size() > 1000 and GameAudio.voices.size() == 12, "synthesized audio and bounded voice pool initialized")
 	expect(KitLib.mesh_of("Brick_Window_Trim_Single") != null, "missing kit has visible mesh")
 	var actor := CharacterModel.create("__missing_test_character")
@@ -112,6 +121,7 @@ func _run() -> void:
 	var patrols: Array[Node] = world.missions_root.get_children()
 	patrols[0]._finish()
 	expect(mission["progress"] == 1.0 and mission["meta"]["visited"].size() == 1, "patrol records completed waypoint")
+	expect(mission["target"] == mission["targets"][1], "patrol HUD and map advance to the next unfinished waypoint")
 	patrols[1]._finish()
 	patrols[2]._finish()
 	expect(Game.missions.is_empty() and Game.stats["missions_done"] == 1, "patrol pays exactly once after three points")

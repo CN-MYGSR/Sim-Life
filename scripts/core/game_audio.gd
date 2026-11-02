@@ -7,6 +7,7 @@ var sounds: Dictionary = {}
 var voices: Array[AudioStreamPlayer] = []
 var _voice := 0
 var ambience: AudioStreamPlayer
+var _shutting_down := false
 
 func _ready() -> void:
 	sounds["step"] = _synth(0.08, 95, 0.55)
@@ -20,16 +21,18 @@ func _ready() -> void:
 		var voice := AudioStreamPlayer.new()
 		voice.volume_db = -14
 		add_child(voice)
+		voice.add_to_group("game_audio_player")
 		voices.append(voice)
 	ambience = AudioStreamPlayer.new()
 	ambience.stream = sounds["city"]
 	ambience.volume_db = -38
 	add_child(ambience)
+	ambience.add_to_group("game_audio_player")
 	if DisplayServer.get_name() != "headless":
 		ambience.play()
 
 func play(cue: String, volume_db := -14.0, pitch := 1.0) -> void:
-	if not sounds.has(cue):
+	if _shutting_down or not sounds.has(cue):
 		return
 	var voice := voices[_voice]
 	_voice = (_voice + 1) % voices.size()
@@ -44,7 +47,20 @@ func engine_player(parent: Node3D) -> AudioStreamPlayer3D:
 	audio.volume_db = -20
 	audio.max_distance = 55
 	parent.add_child(audio)
+	audio.add_to_group("game_audio_player")
 	return audio
+
+func shutdown() -> void:
+	if _shutting_down:
+		return
+	_shutting_down = true
+	for audio in get_tree().get_nodes_in_group("game_audio_player"):
+		audio.stop()
+		audio.stream = null
+	sounds.clear()
+
+func _exit_tree() -> void:
+	shutdown()
 
 func _synth(duration: float, frequency: float, noise: float, loop := false) -> AudioStreamWAV:
 	var rng := RandomNumberGenerator.new()

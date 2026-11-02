@@ -72,7 +72,9 @@ shops, a cafe, clinic, post office, library, workshop, college, museum and commu
 Postal work requires pickup before delivery/payment and supports loading mid-delivery.
 Landmarks award a one-time exploration reward, and owned homes restore health/stamina.
 Pedestrians spawn on sidewalk corners and follow perimeter routes rather than spawning
-inside buildings. Distant skeletal animation is suspended beyond 120 m; physics stays active.
+inside buildings. Distant skeletal animation is suspended beyond 120 m. Ambient pedestrians
+sleep beyond 160 m and wake within 140 m with half-second hysteresis checks; mission NPCs
+and expiring customers keep their physics active. Entities are retained while sleeping.
 
 Original synthesized effects cover footsteps, gunfire, reload, engine, horn, UI and a quiet
 city bed. A fixed pool bounds simultaneous UI/weapon sounds. Real audio output is still
@@ -86,9 +88,42 @@ ground, reject large drops/rises, and test the standing capsule. Actual driving/
 The gameplay suite also verifies all mission types, UI blocking, a wall blocking fire interaction,
 new-cafe income, lease expiry canceling a shift, and customer reclamation.
 
-Latest automated results: 62 scripts/scenes and their declared resource dependencies load
-without errors; 64 state/scene regression checks, 23 actual-input gameplay checks, and
+Latest automated results: 73 scripts/scenes/materials/shaders and their declared dependencies load
+without errors; 67 state/scene regression checks, 23 actual-input gameplay checks, and
 78 door/stair collision checks pass, together with the existing weapon-quiz UI suite.
 The broader resource audit found a MAC-10 material still pointing at an absent source
 import directory. It now uses the already bundled weapon material; all four weapons are
 explicitly equipped and checked by regression tests. No external replacement was downloaded.
+
+## Rendering acceptance and local compatibility
+
+The graphical smoke test captures day, night, full city, map and furnished weapon views
+with the real Forward+ renderer. On the tested AMD FirePro W2100, SSAO reproducibly
+turns roads/floors/ceilings black. Disabling shadows or SSAO removed the corruption;
+raising shadow bias and lowering SSAO intensity did not. `auto` therefore bypasses SSAO
+only for this observed adapter while retaining Forward+, shadows and antialiasing.
+Other adapters keep SSAO. Override using `-- --ssao=on` / `-- --ssao=off`, or the project
+setting `sim_life/graphics/ssao_mode` (`auto`, `on`, `off`). This is a measured compatibility
+workaround, not a general engine or hardware diagnosis.
+
+```powershell
+./tools/godot.ps1 --windowed --audio-driver Dummy --scene res://tests/visual_smoke.tscn -- --seed=20261102 --no-save
+```
+
+All five screenshots were inspected; interiors, weapon orientation, roads, the 6×6 map,
+and night lights are visible. `.artifacts/visual/` contains local images. Hover over the
+small map blocks to read full destination names. Tests explicitly disable persistence so
+benchmark/visual scenes cannot autosave into a player's slot.
+
+PowerShell removes an unquoted `--` when calling scripts. The wrapper restores it for
+documented game flags; quoted `'--'` or argument-array forwarding also work. Native Git
+and Godot binaries remain external to the repository.
+
+Remaining limits: audible quality could not be listened to (no WASAPI device); this is not
+a 60-FPS claim on the legacy 2-GiB GPU; no standalone binary export or restore after actual
+power loss was tested. Optional imported character/kit packs and other GPU/OS combinations
+were not available for acceptance. Existing Synty weapon redistribution rights still require
+upstream evidence. The two-object ObjectDB warning was reproduced with verbose output:
+it retained an AudioStreamWAV and AudioStreamPlaybackWAV from looping ambience. Players
+now stop and detach streams explicitly; normal quit allows 120 ms for mixer cleanup. The
+subsequent verbose graphical acceptance run completed without leaked objects or orphan names.
