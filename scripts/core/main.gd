@@ -38,6 +38,9 @@ const PED_COLORS := [
 func _ready() -> void:
 	Game.world = self
 	randomize()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--seed="):
+			seed(int(arg.substr(7)))
 	_setup_env()
 
 	vehicles_root = Node3D.new()
@@ -469,6 +472,11 @@ func _update_business(delta: float) -> void:
 		_biz_cd = maxf(0.0, _biz_cd - delta)
 	if not _biz_active:
 		return
+	if not _can_operate(_biz_shop):
+		_biz_active = false
+		Game.hud.set_hold(false, 0.0, "")
+		Game.toast.emit("营业中止：请保持在店内并确认职业与租约", "warn")
+		return
 	_biz_timer -= delta
 	var p := 1.0 - clampf(_biz_timer / _biz_total, 0.0, 1.0)
 	if Game.hud:
@@ -478,6 +486,9 @@ func _update_business(delta: float) -> void:
 
 
 func _start_business(shop_id: String) -> void:
+	if not _can_operate(shop_id):
+		Game.toast.emit("需要在已租用的店铺内以对应职业营业", "warn")
+		return
 	if _biz_active:
 		Game.toast.emit("已经在营业了", "warn")
 		return
@@ -496,6 +507,13 @@ func _start_business(shop_id: String) -> void:
 	_spawn_customers(shop_id)
 
 
+func _can_operate(shop_id: String) -> bool:
+	if not is_instance_valid(player) or player.driving or not Game.has_shop(shop_id):
+		return false
+	var shop := Game._find(Data.SHOPS, shop_id)
+	return not shop.is_empty() and Game.job == shop["job"] and player.global_position.distance_to(Game.place_pos(shop_id)) < 22.0
+
+
 func _spawn_customers(shop_id: String) -> void:
 	var door: Vector3 = Game.place_pos(shop_id)
 	var count := 4 if shop_id == "diner" else 5
@@ -503,7 +521,8 @@ func _spawn_customers(shop_id: String) -> void:
 		var ang := randf() * TAU
 		var pos := door + Vector3(cos(ang) * 7.0, 0.2, sin(ang) * 7.0 + 5.0)
 		var c: Color = PED_COLORS[randi() % PED_COLORS.size()]
-		NPC.spawn(npc_root, pos, "customer", c)
+		var customer := NPC.spawn(npc_root, pos, "customer", c)
+		customer.lifetime = 30.0
 
 
 func _finish_business() -> void:
@@ -579,29 +598,44 @@ func _on_vehicles_changed() -> void:
 
 
 func refresh_vehicles() -> void:
+	var existing := {}
 	for c in vehicles_root.get_children():
-		vehicles_root.remove_child(c)
-		c.queue_free()
+		if c is Vehicle:
+			existing[c.uid] = c
 	var base := Data.cell_center(Vector2i(2, 3))
 	var i := 0
 	for v in Game.vehicles:
+		var uid := int(v["uid"])
+		if existing.has(uid):
+			existing[uid].refresh_from_data(v)
+			existing.erase(uid)
+			i += 1
+			continue
 		var veh := Vehicle.new()
-		veh.position = base + Vector3(-13.0 + i * 6.5, 0.2, -10.0)
+		veh.position = v.get("position", base + Vector3(-13.0 + (i % 6) * 5.5, 0.2, -12.0 + (i / 6) * 10.0))
+		veh.rotation.y = float(v.get("rotation", 0.0))
 		vehicles_root.add_child(veh)
 		veh.setup(int(v["uid"]), v)
 		veh.add_to_group("player_vehicle")
 		i += 1
+	for vehicle in existing.values():
+		if vehicle.driven:
+			vehicle.exit()
+		vehicle.queue_free()
 
 
 # ═══════════════ 任务 ═══════════════
 func spawn_mission(m: Dictionary) -> void:
 	if str(m["type"]) == "patrol":
 		var pts: Array = m.get("targets", [m["target"]])
-		for p in pts:
+		for i in range(pts.size()):
+			if i in m["meta"].get("visited", []):
+				continue
 			var mt := MissionTarget.new()
 			missions_root.add_child(mt)
-			var mm := m.duplicate(true)
-			mm["target"] = p
+			var mm := m.duplicate(false)
+			mm["target"] = pts[i]
+			mm["point_index"] = i
 			mt.setup(mm)
 		return
 	var mt2 := MissionTarget.new()
@@ -652,7 +686,9 @@ func _toggle_pause() -> void:
 	if is_instance_valid(pause_layer):
 		_close_pause()
 		return
-	pause_layer = CanvasLayer.new()
+	var menu := PauseMenu.new()
+	menu.resume = _close_pause
+	pause_layer = menu
 	pause_layer.layer = 30
 	add_child(pause_layer)
 
@@ -714,9 +750,11 @@ func _toggle_pause() -> void:
 
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player.in_ui = true
+	get_tree().paused = true
 
 
 func _close_pause() -> void:
+	get_tree().paused = false
 	if is_instance_valid(pause_layer):
 		pause_layer.queue_free()
 		pause_layer = null
@@ -747,6 +785,9 @@ func _property_at(pos: Vector3) -> String:
 
 # ═══════════════ 装修 ═══════════════
 func enter_decorate(pid: String) -> void:
+	if not Game.owns_property(pid) or _property_at(player.global_position) != pid or player.driving:
+		Game.toast.emit("请先走进自己的房子再装修", "warn")
+		return
 	if _decorating:
 		return
 	_decorating = true
@@ -778,29 +819,22 @@ func _rebuild_furniture() -> void:
 	for c in decor_root.get_children():
 		decor_root.remove_child(c)
 		c.queue_free()
-	if _decor_prop == "" or not Game.properties.has(_decor_prop):
-		return
-	for f in Game.properties[_decor_prop]["furniture"]:
-		var fd := {}
-		for d in Data.FURNITURE:
-			if d["id"] == f["id"]:
-				fd = d
-				break
-		if fd.is_empty():
-			continue
-		var node := make_furniture(fd, f["pos"], f["rot"])
-		decor_root.add_child(node)
+	for prop_id in Game.properties:
+		for f in Game.properties[prop_id]["furniture"]:
+			var fd := Game._find(Data.FURNITURE, f["id"])
+			if not fd.is_empty():
+				decor_root.add_child(make_furniture(fd, f["pos"], f["rot"]))
 
 
 func place_furniture(furn_id: String) -> void:
+	if not _decorating or not Game.owns_property(_decor_prop):
+		return
 	var fd := {}
 	for d in Data.FURNITURE:
 		if d["id"] == furn_id:
 			fd = d
 			break
 	if fd.is_empty():
-		return
-	if not Game.try_spend(int(fd["price"]), "购买家具 · %s" % fd["name"]):
 		return
 	# 放在玩家正前方，被占用则向右顺延
 	var fwd := -player.global_transform.basis.z
@@ -810,21 +844,17 @@ func place_furniture(furn_id: String) -> void:
 	right.y = 0.0
 	right = right.normalized()
 	var pos := player.global_position + fwd * 3.2
-	var arr: Array = Game.properties[_decor_prop]["furniture"]
+	var found := false
 	var offs := [0.0, 1.8, -1.8, 3.6, -3.6, 5.4, -5.4, 7.2]
 	for o in offs:
 		pos = player.global_position + fwd * 3.2 + right * float(o)
-		var blocked := false
-		for f in arr:
-			var fp: Vector3 = f["pos"]
-			if Vector2(fp.x - pos.x, fp.z - pos.z).length() < 1.7:
-				blocked = true
-				break
-		if not blocked:
+		pos.y = _floor_y_for(pos)
+		if Game.can_place_furniture(_decor_prop, furn_id, pos, player.rotation.y):
+			found = true
 			break
-	pos.y = _floor_y_for(pos)
-	var rot := player.rotation.y
-	Game.add_furniture(_decor_prop, furn_id, pos, rot)
+	if not found or not Game.add_furniture(_decor_prop, furn_id, pos, player.rotation.y):
+		Game.toast.emit("屋内没有合适的空位，未扣款", "warn")
+		return
 	_rebuild_furniture()
 	if is_instance_valid(decor_ui) and decor_ui.has_method("_refresh_owned"):
 		decor_ui._refresh_owned()

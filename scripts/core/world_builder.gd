@@ -318,6 +318,8 @@ func _make_animal(pos: Vector3, animal_name: String, rot_y: float) -> void:
 
 
 func _load_animal_meshes() -> void:
+	if not ResourceLoader.exists("res://assets/animals/Lo Polly animals FREE.glb"):
+		return
 	var ps: PackedScene = load("res://assets/animals/Lo Polly animals FREE.glb") as PackedScene
 	if ps == null:
 		return

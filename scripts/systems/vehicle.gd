@@ -16,6 +16,7 @@ var wheels: Array = []
 var body_root: Node3D
 var _steer_visual: float = 0.0
 var _cam_base_z: float = 7.8
+var _paint_material: StandardMaterial3D
 
 const GRAV := 22.0
 const MAX_REVERSE := 7.0
@@ -51,6 +52,7 @@ func _build(vdata: Dictionary) -> void:
 	add_child(body_root)
 
 	var body_mat := StandardMaterial3D.new()
+	_paint_material = body_mat
 	body_mat.albedo_color = paint
 	body_mat.roughness = 0.28
 	body_mat.metallic = 0.65
@@ -176,12 +178,7 @@ func _emissive(c: Color) -> StandardMaterial3D:
 func refresh_from_data(vdata: Dictionary) -> void:
 	paint = vdata["paint"]
 	stats = Game.vehicle_stats(vdata)
-	var body_mat: StandardMaterial3D = null
-	for c in body_root.get_children():
-		if c is MeshInstance3D and c.material_override is StandardMaterial3D:
-			var mm: StandardMaterial3D = c.material_override
-			if mm.metallic > 0.5 and mm.roughness < 0.4:
-				mm.albedo_color = paint
+	_paint_material.albedo_color = paint
 
 
 func _physics_process(delta: float) -> void:
@@ -198,8 +195,9 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
-	var throttle := Input.get_action_strength("move_forward") - Input.get_action_strength("move_back")
-	var steer_in := Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
+	var blocked: bool = not is_instance_valid(driver) or driver.in_ui
+	var throttle := 0.0 if blocked else Input.get_action_strength("move_forward") - Input.get_action_strength("move_back")
+	var steer_in := 0.0 if blocked else Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
 
 	var top: float = float(stats.get("top", 24.0))
 	var accel: float = float(stats.get("accel", 7.5))
@@ -227,6 +225,10 @@ func _physics_process(delta: float) -> void:
 	velocity.x = fwd.x * speed
 	velocity.z = fwd.z * speed
 	move_and_slide()
+	if is_on_wall():
+		speed = Vector3(get_real_velocity().x, 0, get_real_velocity().z).dot(fwd)
+	if is_instance_valid(driver):
+		driver.global_position = global_position
 
 	# 轮子动画
 	for wd in wheels:
@@ -241,11 +243,14 @@ func _physics_process(delta: float) -> void:
 
 
 func enter(p) -> void:
+	if driven or not is_instance_valid(p) or p.driving:
+		return
 	driven = true
 	driver = p
 	if p.has_method("set_active"):
 		p.call("set_active", false)
 	p.set("driving", true)
+	Game.active_vehicle = uid
 	cam.current = true
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if Game.hud:
@@ -256,20 +261,40 @@ func enter(p) -> void:
 func exit() -> void:
 	if not driven:
 		return
+	var exit_pos := _safe_exit_position()
+	if exit_pos == Vector3.INF:
+		Game.toast.emit("两侧空间不足，请移动车辆后下车", "warn")
+		return
 	driven = false
 	cam.current = false
 	var p = driver
 	driver = null
+	Game.active_vehicle = -1
 	if is_instance_valid(p):
 		p.set("driving", false)
-		var side := global_transform.basis.x * 2.6
-		p.global_position = global_position + side + Vector3(0, 0.4, 0)
+		p.global_position = exit_pos
 		p.call("set_active", true)
 		var pc = p.get("cam")
 		if pc is Camera3D:
 			pc.current = true
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	Game.toast.emit("已下车", "")
+
+
+func _safe_exit_position() -> Vector3:
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.36
+	capsule.height = 1.8
+	for offset in [Vector3(2.6, 0.2, 0), Vector3(-2.6, 0.2, 0), Vector3(0, 0.2, 4.2)]:
+		var candidate: Vector3 = global_transform * offset
+		var query := PhysicsShapeQueryParameters3D.new()
+		query.shape = capsule
+		query.transform = Transform3D(Basis.IDENTITY, candidate + Vector3(0, 0.9, 0))
+		query.collision_mask = 1 | (1 << 2)
+		query.exclude = [get_rid()]
+		if get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty():
+			return candidate
+	return Vector3.INF
 
 
 func _unhandled_input(event: InputEvent) -> void:

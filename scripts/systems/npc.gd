@@ -12,6 +12,8 @@ var flee_from: Node3D = null
 var fleeing: bool = false
 var alive: bool = true
 var health: float = 100.0
+var mission_id: int = -1
+var lifetime: float = -1.0
 
 var _t: float = 0.0
 var _wander: float = 0.0
@@ -74,6 +76,11 @@ func _pick_wander_target() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if lifetime > 0.0:
+		lifetime -= delta
+		if lifetime <= 0.0:
+			queue_free()
+			return
 	if not is_on_floor():
 		velocity.y -= GRAV * delta
 	elif velocity.y < 0.0:
@@ -155,16 +162,12 @@ func _die() -> void:
 	if _actor != null:
 		_actor.play_pose("Death", 1.0)
 		_actor.position.y = 0.15
-	if kind == "criminal":
-		for m in Game.missions.duplicate():
-			if str(m["type"]) == "arrest":
-				Game.complete_mission(int(m["id"]))
-				break
-	elif kind == "pedestrian":
+	if mission_id >= 0:
+		Game.abandon_mission(mission_id)
+		Game.toast.emit("任务失败：目标死亡", "warn")
+	if kind != "criminal":
 		Game.add_heat(0.6)
 		Game.toast.emit("你袭击了平民，通缉度上升", "error")
-	else:
-		Game.add_heat(0.3)
 	await get_tree().create_timer(5.0).timeout
 	queue_free()
 

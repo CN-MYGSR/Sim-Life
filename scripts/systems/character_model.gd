@@ -45,14 +45,15 @@ static func pick(kind: String) -> String:
 func setup(name: String) -> void:
 	model_name = name
 	var ps: PackedScene = _scene_cache.get(name)
-	if ps == null:
-		ps = load(DIR + name + ".gltf") as PackedScene
+	if not _scene_cache.has(name):
+		var path := DIR + name + ".gltf"
+		ps = load(path) as PackedScene if ResourceLoader.exists(path) else null
 		_scene_cache[name] = ps
 	var inst: Node3D
 	if ps != null:
 		inst = ps.instantiate() as Node3D
 	else:
-		inst = Node3D.new()
+		inst = ProceduralAssets.person()
 	add_child(inst)
 	# 模型按米制导出时约 3.3m 高，缩放到正常人形身高
 	var raw_h := _height(inst, Transform3D.IDENTITY)

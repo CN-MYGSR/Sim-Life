@@ -177,16 +177,15 @@ func get_font() -> FontFile:
 func _process(delta: float) -> void:
 	if get_tree().paused:
 		return
-	var before := clock
 	clock += delta
-	if clock >= Data.DAY_LENGTH:
+	while clock >= Data.DAY_LENGTH:
 		clock -= Data.DAY_LENGTH
 		day += 1
-		_payday()
 		_decay_shop_rent()
+		_payday()
 	time_changed.emit()
 	# 体力恢复
-	if player and player.has_method("is_moving") and not bool(player.call("is_moving")):
+	if is_instance_valid(player) and player.has_method("is_moving") and not bool(player.call("is_moving")):
 		stamina = min(100.0, stamina + delta * 6.0)
 	# 通缉度缓慢衰减
 	if heat > 0.0:
@@ -225,6 +224,8 @@ func _decay_shop_rent() -> void:
 			shops.erase(k)
 			changed = true
 	if changed:
+		if not job_has_shop(job):
+			set_job("unemployed")
 		shops_changed.emit()
 		toast.emit("有店铺租约已到期", "warn")
 
@@ -240,6 +241,8 @@ func add_cash(n: int, reason: String = "") -> void:
 
 
 func try_spend(n: int, reason: String = "") -> bool:
+	if n <= 0:
+		return false
 	if cash < n:
 		toast.emit("现金不足，还差 $%d" % (n - cash), "error")
 		return false
@@ -256,9 +259,13 @@ func set_job(id: String) -> bool:
 		return false
 	var info: Dictionary = Data.JOBS[id]
 	var need: String = info.get("need_shop", "")
-	if need != "" and not has_shop(need):
+	if need != "" and not job_has_shop(id):
 		toast.emit("需要先租下「%s」的使用权" % _shop_name(need), "error")
 		return false
+	if job != id:
+		for mission in missions.duplicate():
+			if Data.MISSION_TYPES[mission["type"]]["job"] != id:
+				abandon_mission(int(mission["id"]))
 	job = id
 	job_changed.emit()
 	toast.emit("职业已变更为「%s」" % info.get("name", ""), "ok")
@@ -349,6 +356,15 @@ func has_shop(id: String) -> bool:
 	return shops.has(id) and int(shops[id]) >= day
 
 
+func job_has_shop(job_id: String) -> bool:
+	if str(Data.JOBS.get(job_id, {}).get("need_shop", "")) == "":
+		return true
+	for shop in Data.SHOPS:
+		if shop["job"] == job_id and has_shop(shop["id"]):
+			return true
+	return false
+
+
 func rent_shop(id: String) -> bool:
 	var data: Dictionary = {}
 	for s in Data.SHOPS:
@@ -363,7 +379,7 @@ func rent_shop(id: String) -> bool:
 	var rent: int = data["rent"]
 	if not try_spend(rent, "租金 · %s" % data["name"]):
 		return false
-	shops[id] = day + 7
+	shops[id] = day + 6
 	shops_changed.emit()
 	toast.emit("已租下「%s」，有效期 7 天" % data["name"], "ok")
 	return true
@@ -389,15 +405,43 @@ func buy_property(id: String) -> bool:
 	return true
 
 
-func add_furniture(prop_id: String, furn_id: String, pos: Vector3, rot_y: float) -> void:
-	if not properties.has(prop_id):
-		return
+func can_place_furniture(prop_id: String, furn_id: String, pos: Vector3, rot_y: float) -> bool:
+	var prop := _find(Data.PROPERTIES, prop_id)
+	var furn := _find(Data.FURNITURE, furn_id)
+	if not owns_property(prop_id) or prop.is_empty() or furn.is_empty() or not pos.is_finite() or not is_finite(rot_y):
+		return false
+	var center: Vector3 = Data.cell_center(prop["cell"]) + prop["offset"]
+	var size: Vector3 = furn["size"]
+	var half_x := (absf(cos(rot_y)) * size.x + absf(sin(rot_y)) * size.z) * 0.5
+	var half_z := (absf(sin(rot_y)) * size.x + absf(cos(rot_y)) * size.z) * 0.5
+	if absf(pos.x - center.x) + half_x > prop["size"].x * 0.5 - 0.5 or absf(pos.z - center.z) + half_z > prop["size"].y * 0.5 - 0.5:
+		return false
+	if pos.y < -0.1 or pos.y + size.y > 5.0:
+		return false
+	for existing in properties[prop_id]["furniture"]:
+		var other := _find(Data.FURNITURE, existing["id"])
+		var other_size: Vector3 = other["size"]
+		var other_rot: float = existing["rot"]
+		var other_half := Vector2(absf(cos(other_rot)) * other_size.x + absf(sin(other_rot)) * other_size.z, absf(sin(other_rot)) * other_size.x + absf(cos(other_rot)) * other_size.z) * 0.5
+		var diff: Vector3 = existing["pos"] - pos
+		if absf(diff.x) < half_x + other_half.x + 0.1 and absf(diff.z) < half_z + other_half.y + 0.1:
+			return false
+	return true
+
+
+func add_furniture(prop_id: String, furn_id: String, pos: Vector3, rot_y: float) -> bool:
+	if not can_place_furniture(prop_id, furn_id, pos, rot_y):
+		return false
+	var furn := _find(Data.FURNITURE, furn_id)
+	if not try_spend(int(furn["price"]), "购买家具 · %s" % furn["name"]):
+		return false
 	properties[prop_id]["furniture"].append({"id": furn_id, "pos": pos, "rot": rot_y})
 	properties_changed.emit()
+	return true
 
 
 func remove_furniture(prop_id: String, index: int) -> void:
-	if not properties.has(prop_id):
+	if not owns_property(prop_id):
 		return
 	var arr: Array = properties[prop_id]["furniture"]
 	if index < 0 or index >= arr.size():
@@ -421,6 +465,9 @@ func owned_property_list() -> Array:
 
 # ═══════════════ 车辆 ═══════════════
 func buy_vehicle(type_id: String) -> bool:
+	if vehicles.size() >= 12:
+		toast.emit("车库已满（12 辆），请使用现有车辆", "warn")
+		return false
 	var data: Dictionary = _find(Data.VEHICLES, type_id)
 	if data.is_empty():
 		return false
@@ -446,6 +493,8 @@ func vehicle_by_uid(uid: int) -> Dictionary:
 
 
 func upgrade_vehicle(uid: int, part: String) -> bool:
+	if not Data.UPGRADES.has(part):
+		return false
 	var v := vehicle_by_uid(uid)
 	if v.is_empty():
 		return false
@@ -464,6 +513,8 @@ func upgrade_vehicle(uid: int, part: String) -> bool:
 
 
 func paint_vehicle(uid: int, paint_index: int) -> bool:
+	if paint_index < 0 or paint_index >= Data.PAINTS.size():
+		return false
 	var v := vehicle_by_uid(uid)
 	if v.is_empty():
 		return false
@@ -565,6 +616,8 @@ func _pick_mission_target(type_id: String) -> Vector3:
 
 
 func mission_progress(mid: int, amount: float) -> void:
+	if amount <= 0.0 or not is_finite(amount):
+		return
 	for m in missions:
 		if int(m["id"]) != mid:
 			continue
@@ -629,6 +682,8 @@ func clear_heat() -> void:
 	if heat <= 0.0:
 		return
 	var fine := int(heat * 220)
+	if not try_spend(fine, "缴纳罚款"):
+		return
 	heat = 0.0
 	heat_changed.emit()
 	toast.emit("已缴纳罚款 $%d，通缉解除" % fine, "money")

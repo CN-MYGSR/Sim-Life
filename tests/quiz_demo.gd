@@ -8,7 +8,7 @@ extends Node3D
 ##          shots/quiz_result_fail.png
 ## 运行：D:\Godot\Godot_v4.7.2-stable_win64.exe --path "D:\Sim Life" "res://tests/quiz_demo.tscn"
 
-const OUT := "D:/Sim Life/shots/"
+const OUT := "res://shots/quiz/"
 const SEED := 20261101
 
 var panel: QuizPanel
@@ -356,6 +356,9 @@ func _wait(sec: float) -> void:
 
 
 func _shot(name: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	DirAccess.make_dir_recursive_absolute(OUT)
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()

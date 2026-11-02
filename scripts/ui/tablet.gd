@@ -180,7 +180,7 @@ func open(page: String = "") -> void:
 func close() -> void:
 	visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	if is_instance_valid(Game.player) and not Game.player.driving:
+	if is_instance_valid(Game.player):
 		Game.player.in_ui = false
 
 
@@ -468,7 +468,7 @@ func _page_jobs() -> void:
 		if int(j["salary"]) > 0:
 			extra += "日薪 $%d" % int(j["salary"])
 		if j["need_shop"] != "":
-			var ok := Game.has_shop(j["need_shop"])
+			var ok := Game.job_has_shop(str(jid))
 			extra += ("　·　店铺：%s" % ("已租" if ok else "未租"))
 			v.add_child(_label(extra, 12, Data.C_TEAL if ok else Data.C_RED))
 		elif extra != "":

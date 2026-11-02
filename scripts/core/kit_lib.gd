@@ -12,15 +12,17 @@ static var _meshes: Dictionary = {}
 
 static func scene(name: String) -> PackedScene:
 	if not _scenes.has(name):
-		_scenes[name] = load(DIR + name + ".gltf")
+		var path := DIR + name + ".gltf"
+		_scenes[name] = load(path) if ResourceLoader.exists(path) else null
 	return _scenes[name]
 
 
 static func inst(name: String) -> Node3D:
 	var ps: PackedScene = scene(name)
 	if ps == null:
-		push_warning("KitLib: missing module " + name)
-		return Node3D.new()
+		var fallback := MeshInstance3D.new()
+		fallback.mesh = mesh_of(name)
+		return fallback
 	return ps.instantiate() as Node3D
 
 
@@ -37,7 +39,11 @@ static func place(parent: Node3D, name: String, pos: Vector3, rot_y := 0.0) -> N
 static func mesh_of(name: String) -> Mesh:
 	if _meshes.has(name):
 		return _meshes[name]
-	var n := inst(name)
+	var ps := scene(name)
+	if ps == null:
+		_meshes[name] = ProceduralAssets.module_mesh(name)
+		return _meshes[name]
+	var n := ps.instantiate()
 	var m := _find_mesh(n)
 	var simple := _simplify(m)
 	_meshes[name] = simple

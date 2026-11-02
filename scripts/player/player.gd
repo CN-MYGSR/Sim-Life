@@ -96,6 +96,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if driving:
+		return
 	if in_ui or locked:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -218,6 +220,7 @@ func get_camera() -> Camera3D:
 
 
 func set_active(active: bool) -> void:
+	shape.set_deferred("disabled", not active)
 	cam.current = active
 	visible = active
 	set_physics_process(active)

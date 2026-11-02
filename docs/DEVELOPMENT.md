@@ -26,3 +26,23 @@ its missing visuals make it unsuitable as a visual-quality performance baseline.
 
 2026-11-02: clean clone and `--headless --editor --import --quit` passed on the required engine.
 The initial runtime reported 41 missing-resource errors; follow-up work restores visible alternatives.
+
+## Stability pass (2026-11-02)
+
+`./tools/test.ps1` passed: editor import, 32 regression checks and the existing
+weapon-qualification UI tests (`QUIZ_DEMO_DONE fail=0`). The runner treats engine
+script/resource errors as failures even when Godot returns exit code zero.
+
+Covered fixes: missing building/character packs now have visible animated replacements;
+negative purchases and invalid upgrade/paint inputs are rejected; fines charge money;
+rent lasts seven inclusive days and expired jobs stop; multi-day clock advancement works;
+career changes cancel incompatible missions; invalid/overlapping furniture never charges;
+refunding is idempotent; vehicle upgrades retain node/location and paint leaves glass intact;
+enter/exit restores collision and camera, and tablet close releases the driver UI lock;
+pause freezes the simulation; arrest follows the real fleeing target and killing a target
+does not pay for an arrest; patrol completion records visited points and pays only once.
+Business is limited to a valid rented shop/career/proximity; customers expire after 30 seconds.
+
+Run `./tools/test.ps1` for automated verification. Local logs are under `.artifacts/`.
+The development host has an AMD FirePro W2100 with 2 GiB VRAM. Forward+ initialization
+works; the Windows session has no working WASAPI output, so audio listening remains unverified.

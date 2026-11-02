@@ -18,6 +18,7 @@ var _beam: MeshInstance3D
 var _npc: NPC
 var _fire_parts: Array = []
 var _t: float = 0.0
+var _showing_hold := false
 
 
 func setup(m: Dictionary) -> void:
@@ -25,7 +26,6 @@ func setup(m: Dictionary) -> void:
 	mtype = str(m["type"])
 	mid = int(m["id"])
 	position = m["target"]
-	_build_ring()
 	match mtype:
 		"arrest":
 			radius = 5.0
@@ -61,6 +61,7 @@ func setup(m: Dictionary) -> void:
 			hold_need = 4.0
 			prompt_text = "按住 E 撬开收银台"
 			_make_beam(Data.C_RED)
+	_build_ring()
 
 
 func _build_ring() -> void:
@@ -109,10 +110,12 @@ func _make_beam(color: Color) -> void:
 
 func _spawn_criminal() -> void:
 	_npc = NPC.spawn(self, Vector3(0, 0, 0), "criminal", Color(0.55, 0.16, 0.18))
+	_npc.mission_id = mid
 
 
 func _spawn_patient() -> void:
 	_npc = NPC.spawn(self, Vector3(0.6, 0, 0), "patient", Color(0.35, 0.42, 0.55))
+	_npc.mission_id = mid
 	# 急救包
 	var kit := MeshInstance3D.new()
 	var bm := BoxMesh.new()
@@ -193,7 +196,7 @@ func _make_crate() -> void:
 	add_child(crate)
 
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if done:
 		return
 	_t += delta
@@ -213,21 +216,31 @@ func _process(delta: float) -> void:
 
 	if not is_instance_valid(Game.player):
 		return
+	if Game.player.in_ui or Game.player.driving or Game.player.decor_mode or Game.player.locked:
+		_release_hold(delta)
+		return
 	var pp: Vector3 = Game.player.global_position
-	var flat := Vector2(pp.x - global_position.x, pp.z - global_position.z)
+	var target := global_position
+	if is_instance_valid(_npc):
+		target = _npc.global_position
+		mission["target"] = target
+		_ring.position = _npc.position + Vector3(0, 0.08, 0)
+	var flat := Vector2(pp.x - target.x, pp.z - target.z)
 	var dist := flat.length()
-	var in_range := dist <= radius and absf(pp.y - global_position.y) < 4.0
+	var in_range := dist <= radius and absf(pp.y - target.y) < 2.5
+	if in_range:
+		var query := PhysicsRayQueryParameters3D.create(Game.player.cam.global_position, target + Vector3.UP)
+		query.collision_mask = 1
+		in_range = get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 	if not in_range:
-		if hold > 0.0:
-			hold = maxf(0.0, hold - delta * 1.2)
-		if Game.hud:
-			Game.hud.set_hold(false, 0.0, "")
+		_release_hold(delta)
 		return
+	_showing_hold = true
 
 	if hold_need > 0.0:
 		if Input.is_action_pressed("interact"):
-			if hold <= 0.0 and is_instance_valid(_npc):
+			if is_instance_valid(_npc):
 				_npc.set_physics_process(false)
 			hold += delta
 			if Game.hud:
@@ -235,7 +248,7 @@ func _process(delta: float) -> void:
 			if hold >= hold_need:
 				_finish()
 		else:
-			if hold > 0.0 and is_instance_valid(_npc):
+			if is_instance_valid(_npc) and _npc.alive:
 				_npc.set_physics_process(true)
 			hold = maxf(0.0, hold - delta * 0.8)
 			if Game.hud:
@@ -251,10 +264,24 @@ func _process(delta: float) -> void:
 		_finish()
 
 
+func _release_hold(delta: float) -> void:
+	hold = maxf(0.0, hold - delta * 1.2)
+	stand = 0.0
+	if is_instance_valid(_npc) and _npc.alive:
+		_npc.set_physics_process(true)
+	if _showing_hold and is_instance_valid(Game.hud):
+		Game.hud.set_hold(false, 0.0, "")
+	_showing_hold = false
+
+
 func _finish() -> void:
 	if done:
 		return
 	done = true
+	if mtype == "patrol":
+		var visited: Array = mission["meta"].get("visited", [])
+		visited.append(int(mission.get("point_index", 0)))
+		mission["meta"]["visited"] = visited
 	if Game.hud:
 		Game.hud.set_hold(false, 0.0, "")
 	Game.mission_progress(mid, 1.0)

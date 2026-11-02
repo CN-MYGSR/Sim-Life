@@ -1,0 +1,119 @@
+extends Node
+## Real state transitions and scene integration. Any failed check exits nonzero.
+
+var failures := 0
+var checks := 0
+var world: Node3D
+
+func _ready() -> void:
+	_run.call_deferred()
+
+func expect(condition: bool, description: String) -> void:
+	checks += 1
+	if not condition:
+		failures += 1
+		push_error("FAIL: " + description)
+	else:
+		print("PASS: ", description)
+
+func _run() -> void:
+	Game.set_process(false)
+	Game.reset_new_game()
+	var cash_before: int = Game.cash
+	expect(not Game.try_spend(-100), "negative spending rejected")
+	expect(Game.cash == cash_before, "negative spending cannot mint money")
+	Game.heat = 2.0
+	Game.clear_heat()
+	expect(Game.cash == cash_before - 440 and Game.heat == 0.0, "fine actually charges cash")
+	Game.cash = 0
+	Game.heat = 5.0
+	Game.clear_heat()
+	expect(Game.heat == 5.0 and Game.cash == 0, "unaffordable fine preserves heat")
+	Game.cash = 100000
+	expect(Game.rent_shop("shopfront") and Game.set_job("clerk"), "clerk may operate rented shopfront")
+	expect(Game.shops["shopfront"] == 7, "seven-day rent includes purchase day")
+	Game.clock = Data.DAY_LENGTH - 0.01
+	Game._process(Data.DAY_LENGTH * 7 + 0.02)
+	expect(Game.day == 9 and not Game.has_shop("shopfront") and Game.job == "unemployed", "multi-day advancement expires rent and dependent job")
+	Game.reset_new_game()
+	Game.cash = 100000
+	expect(Game.buy_vehicle("sedan"), "vehicle purchase")
+	expect(not Game.upgrade_vehicle(1, "bogus"), "invalid upgrade rejected")
+	expect(not Game.paint_vehicle(1, -1) and not Game.paint_vehicle(1, 999), "invalid paint indices rejected")
+	expect(Game.buy_property("apt201"), "property purchase")
+	var prop: Dictionary = Data.PROPERTIES[0]
+	var center: Vector3 = Data.cell_center(prop["cell"]) + prop["offset"]
+	cash_before = Game.cash
+	expect(not Game.add_furniture("apt201", "sofa", Vector3(10000, 0, 0), 0), "furniture outside property rejected")
+	expect(Game.cash == cash_before, "failed placement does not charge")
+	expect(Game.add_furniture("apt201", "sofa", center, 0), "valid furniture purchased and placed")
+	cash_before = Game.cash
+	expect(not Game.add_furniture("apt201", "sofa", center, 0) and Game.cash == cash_before, "overlapping furniture does not charge")
+	Game.remove_furniture("apt201", 0)
+	var refund_cash: int = Game.cash
+	Game.remove_furniture("apt201", 0)
+	expect(Game.cash == refund_cash, "furniture refund cannot repeat")
+	Game.set_job("police")
+	var mission: Dictionary = Game.accept_mission("patrol")
+	expect(not mission.is_empty() and Game.accept_mission("patrol").is_empty(), "duplicate missions rejected")
+	Game.set_job("doctor")
+	expect(Game.missions.is_empty(), "changing career cancels incompatible mission")
+	Game.reset_new_game()
+	world = load("res://scenes/main.tscn").instantiate()
+	add_child(world)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	expect(world.builder.kit_buildings.size() >= 12, "public buildings generated")
+	expect(KitLib.mesh_of("Brick_Window_Trim_Single") != null, "missing kit has visible mesh")
+	var actor := CharacterModel.create("__missing_test_character")
+	add_child(actor)
+	expect(actor.anim_player != null and actor.anim_player.has_animation("Walk"), "missing character has animated fallback")
+	actor.queue_free()
+	world._toggle_pause()
+	var clock_before: float = Game.clock
+	await get_tree().create_timer(0.15, true).timeout
+	expect(get_tree().paused and Game.clock == clock_before, "pause freezes simulation")
+	world._close_pause()
+	expect(not get_tree().paused and not world.player.in_ui, "resume restores controls")
+	Game.cash = 100000
+	Game.buy_vehicle("sedan")
+	var vehicle: Vehicle = world.vehicles_root.get_child(0)
+	vehicle.global_position += Vector3(0, 0, -3)
+	var parked := vehicle.global_position
+	Game.upgrade_vehicle(vehicle.uid, "engine")
+	expect(world.vehicles_root.get_child(0) == vehicle and vehicle.global_position == parked, "upgrade retains vehicle node and location")
+	vehicle.enter(world.player)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	expect(world.player.driving and world.player.shape.disabled, "driver collision disabled inside vehicle")
+	world.tablet.open("vehicles")
+	world.tablet.close()
+	expect(not world.player.in_ui, "closing tablet while driving releases UI lock")
+	vehicle.exit()
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	expect(not world.player.driving and not world.player.shape.disabled and world.player.cam.current, "exit restores collision and camera")
+	Game.set_job("police")
+	mission = Game.accept_mission("patrol")
+	var patrols: Array[Node] = world.missions_root.get_children()
+	patrols[0]._finish()
+	expect(mission["progress"] == 1.0 and mission["meta"]["visited"].size() == 1, "patrol records completed waypoint")
+	patrols[1]._finish()
+	patrols[2]._finish()
+	expect(Game.missions.is_empty() and Game.stats["missions_done"] == 1, "patrol pays exactly once after three points")
+	cash_before = Game.cash
+	Game.complete_mission(int(mission["id"]))
+	expect(Game.cash == cash_before, "completed mission cannot pay twice")
+	mission = Game.accept_mission("arrest")
+	var arrest: MissionTarget = world.missions_root.get_child(world.missions_root.get_child_count() - 1)
+	arrest._npc.global_position += Vector3(10, 0, 0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	expect(mission["target"].distance_to(arrest._npc.global_position) < 1, "arrest map target tracks fleeing NPC")
+	cash_before = Game.cash
+	arrest._npc.take_damage(1000)
+	expect(Game.missions.is_empty() and Game.cash == cash_before, "killing target cannot award arrest payment")
+	world.queue_free()
+	await get_tree().process_frame
+	print("REGRESSION: ", checks, " checks, ", failures, " failures")
+	get_tree().quit(1 if failures else 0)
