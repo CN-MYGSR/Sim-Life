@@ -5,6 +5,7 @@
 build/
 # dev screenshots
 shots/
+.artifacts/
 
 assets/kit/
 assets/chars/
