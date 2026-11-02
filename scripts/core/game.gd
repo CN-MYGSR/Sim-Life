@@ -72,6 +72,9 @@ func _ready() -> void:
 	if win:
 		win.theme = _theme
 	persistence_enabled = not "--no-save" in OS.get_cmdline_user_args()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--test=") or arg.begins_with("--shot="):
+			persistence_enabled = false
 	if persistence_enabled:
 		load_game(false)
 

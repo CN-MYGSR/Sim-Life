@@ -84,9 +84,8 @@ func _process(_delta: float) -> void:
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png(output.get_basename() + ".png")
 		var game_audio := get_node_or_null("/root/GameAudio")
-		if game_audio != null and game_audio.has_method("shutdown"):
-			game_audio.shutdown()
-			await get_tree().create_timer(0.12, true).timeout
+		if game_audio != null and game_audio.has_method("finish_shutdown"):
+			await game_audio.finish_shutdown()
 		get_tree().quit()
 
 func _mean(values: Array[float]) -> float:

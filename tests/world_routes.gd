@@ -30,6 +30,7 @@ func _run() -> void:
 			await _walk(150)
 			_expect(player.global_position.y > (floor_index + 1) * 3.0 - 0.25, "%s stairs %d y=%.2f" % [building.place["id"], floor_index + 1, player.global_position.y])
 	print("WORLD_ROUTES: ", checks, " checks, ", failures, " failures")
+	await GameAudio.finish_shutdown()
 	get_tree().quit(1 if failures else 0)
 
 func _walk(ticks: int) -> void:

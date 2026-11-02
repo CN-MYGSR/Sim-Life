@@ -62,6 +62,14 @@ func shutdown() -> void:
 func _exit_tree() -> void:
 	shutdown()
 
+func finish_shutdown() -> void:
+	shutdown()
+	# Engine --fixed-fps advances timers faster than wall time in headless tests.
+	# The audio thread needs real time to release its last playback reference.
+	var deadline := Time.get_ticks_msec() + 120
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+
 func _synth(duration: float, frequency: float, noise: float, loop := false) -> AudioStreamWAV:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(str(duration) + str(frequency))

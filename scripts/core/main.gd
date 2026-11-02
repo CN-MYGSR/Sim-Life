@@ -238,9 +238,9 @@ func _run_test(name: String) -> void:
 				var npc := NPC.spawn(npc_root, nc + Vector3(-7.2 + i * 2.4, 0.2, 2.0), kinds[i], Color(0.5, 0.5, 0.5))
 				npc.rotation.y = PI
 			await get_tree().create_timer(1.2).timeout
-			await _shot_now("D:/Sim Life/shots/npc_show.png")
+			await _shot_now("res://shots/npc_show.png")
 			await get_tree().create_timer(2.0).timeout
-			await _shot_now("D:/Sim Life/shots/npc_show2.png")
+			await _shot_now("res://shots/npc_show2.png")
 			print("NPC_SHOW fps=", Engine.get_frames_per_second(), " npcs=", npc_root.get_child_count())
 		"gunquiz":
 			# 武器购买：平板武器页 → 答题 → 通过后扣款购枪
@@ -251,10 +251,10 @@ func _run_test(name: String) -> void:
 			var qs: Array = WeaponQuiz.pick(3, rng)
 			Game.tablet.open("weapons")
 			await get_tree().create_timer(0.4).timeout
-			await _shot_now("D:/Sim Life/shots/gun_page.png")
+			await _shot_now("res://shots/gun_page.png")
 			Game.tablet._open_weapon_quiz("m4", qs)
 			await get_tree().create_timer(0.5).timeout
-			await _shot_now("D:/Sim Life/shots/gun_quiz.png")
+			await _shot_now("res://shots/gun_quiz.png")
 			var qp := _find_quiz(Game.tablet)
 			if qp != null:
 				for i in range(qs.size()):
@@ -263,11 +263,11 @@ func _run_test(name: String) -> void:
 					qp.advance()
 					await get_tree().create_timer(0.2).timeout
 				await get_tree().create_timer(0.3).timeout
-				await _shot_now("D:/Sim Life/shots/gun_quiz_result.png")
+				await _shot_now("res://shots/gun_quiz_result.png")
 				qp.advance()
 				await get_tree().create_timer(0.4).timeout
 			print("GUNQUIZ owned=", Game.owns_weapon("m4"), " cash=", Game.cash, " weapon=", Game.weapon)
-			await _shot_now("D:/Sim Life/shots/gun_bought.png")
+			await _shot_now("res://shots/gun_bought.png")
 			get_tree().quit()
 		"gunfire":
 			Game.set_job("police")
@@ -284,7 +284,7 @@ func _run_test(name: String) -> void:
 				await get_tree().create_timer(0.22).timeout
 				Input.action_release("shoot")
 				await get_tree().create_timer(0.06).timeout
-			await _shot_now("D:/Sim Life/shots/gun_fire.png")
+			await _shot_now("res://shots/gun_fire.png")
 			print("GUNFIRE hp0=", hp0, " hp=", npc2.health, " alive=", npc2.alive, " mag=", player.weapon_sys.mag, " heat=", Game.heat)
 			get_tree().quit()
 		"climb2":
@@ -345,14 +345,14 @@ func _run_test(name: String) -> void:
 			for i in range(6):
 				await _walk_forward(0.8)
 				print("TOUR ", i, " pos=", player.global_position)
-				await _shot_now("D:/Sim Life/shots/tour_%d.png" % i)
+				await _shot_now("res://shots/tour_%d.png" % i)
 			# 楼梯
 			player.teleport(tc + Vector3(30.0 * 0.5 - 4.25 + 1.0, 0.3, 20.0 * 0.5 - 5.75 + 4.7))
 			player.rotation.y = 0.0
 			for i in range(8):
 				await _walk_forward(0.9)
 				print("STAIR ", i, " pos=", player.global_position)
-				await _shot_now("D:/Sim Life/shots/tour_s%d.png" % i)
+				await _shot_now("res://shots/tour_s%d.png" % i)
 		"fire_done":
 			await _test_hold("firefighter", "fire", 3.8)
 		"heal_done":
@@ -393,6 +393,9 @@ func _find_quiz(n: Node) -> QuizPanel:
 
 
 func _shot_now(path: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(path)
@@ -417,6 +420,11 @@ func _test_hold(job_id: String, mtype: String, hold_sec: float) -> void:
 
 
 func _screenshot_after(path: String, delay: float) -> void:
+	if DisplayServer.get_name() == "headless":
+		push_warning("Screenshot capture requires a rendering display")
+		get_tree().quit(1)
+		return
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	await get_tree().create_timer(delay).timeout
 	await RenderingServer.frame_post_draw
 	if is_instance_valid(player) and is_instance_valid(player.cam):
@@ -854,9 +862,8 @@ func _quit_game() -> void:
 		return
 	_quitting = true
 	get_tree().paused = true
-	GameAudio.shutdown()
 	# Let the audio mixer release looping WAV playback before server teardown.
-	await get_tree().create_timer(0.12, true).timeout
+	await GameAudio.finish_shutdown()
 	get_tree().quit()
 
 

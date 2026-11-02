@@ -113,6 +113,7 @@ func _run() -> void:
 			customers += 1
 	_expect(customers == 0, "business customers are reclaimed")
 	print("GAMEPLAY_FLOW: ", checks, " checks, ", failures, " failures")
+	await GameAudio.finish_shutdown()
 	get_tree().quit(1 if failures else 0)
 
 func _ticks(count: int) -> void:

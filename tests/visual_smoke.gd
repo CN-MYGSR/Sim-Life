@@ -26,8 +26,10 @@ func _run() -> void:
 	world.tablet.close()
 	var overview := Camera3D.new()
 	world.add_child(overview)
-	overview.global_position = Vector3(0, 320, 220)
-	overview.look_at(Vector3.ZERO)
+	overview.projection = Camera3D.PROJECTION_ORTHOGONAL
+	overview.size = 420
+	overview.global_position = Vector3(0, 100, 0)
+	overview.rotation_degrees = Vector3(-90, 0, 0)
 	overview.far = 1000
 	overview.current = true
 	await _shot("city_overview")

@@ -230,4 +230,5 @@ func _run() -> void:
 	world.queue_free()
 	await get_tree().process_frame
 	print("REGRESSION: ", checks, " checks, ", failures, " failures")
+	await GameAudio.finish_shutdown()
 	get_tree().quit(1 if failures else 0)
