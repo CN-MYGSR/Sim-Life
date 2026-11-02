@@ -1,7 +1,7 @@
 [gd_scene format=4]
 
 [ext_resource type="Texture2D" path="res://assets/weapons/textures/PolygonMilitary_Weapons_01.png" id="1_7rew6"]
-[ext_resource type="Material" path="res://Assets/PolygonMilitary/Models/extracted/SM_Wep_Preset_B_SMG_01.default.material" id="2_144j6"]
+[ext_resource type="Material" path="res://assets/weapons/materials/PolygonMilitary_Weapon_Mat_01.material" id="2_144j6"]
 [ext_resource type="Texture2D" path="res://assets/weapons/textures/PolygonMilitary_Weapons_09.png" id="3_bi8uh"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rd5i4"]

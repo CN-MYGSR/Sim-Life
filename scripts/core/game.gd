@@ -35,6 +35,7 @@ var weapon_ammo: Dictionary = {}
 var player_state: Dictionary = {"position": Vector3(2, 0.3, 14), "yaw": 0.0, "pitch": 0.0}
 var save_path := "user://saves/city.save"
 var persistence_enabled := true
+var explored_places: Array = []
 var stats: Dictionary = {"missions_done": 0, "earned": 0, "arrests": 0, "fires": 0, "heals": 0}
 
 # ─────────────── 场景引用 ───────────────
@@ -575,10 +576,13 @@ func accept_mission(type_id: String) -> Dictionary:
 	_mission_seq += 1
 	var target := _pick_mission_target(type_id)
 	var extra: Dictionary = {}
+	if type_id == "parcel":
+		target = place_pos("post")
+		extra["delivery_target"] = _pick_mission_target("deliver")
 	if type_id == "patrol":
 		var pts := [
 			Data.cell_center(Vector2i(1, 1)) + Vector3(0, 0, 19),
-			Data.cell_center(Vector2i(3, 2)) + Vector3(0, 0, 17),
+			Data.sidewalk_point(Vector2i(Data.GRID - 1, Data.GRID - 2), 2),
 			Data.cell_center(Vector2i(0, 3)) + Vector3(0, 0, 17),
 		]
 		target = pts[0]
@@ -589,6 +593,8 @@ func accept_mission(type_id: String) -> Dictionary:
 			need = 3
 		"capture":
 			need = 1
+		"parcel":
+			need = 2
 	var m := {
 		"id": _mission_seq,
 		"type": type_id,
@@ -622,12 +628,7 @@ func _pick_mission_target(type_id: String) -> Vector3:
 			return places.get("mart", Vector3.ZERO) + Vector3(0, 0, 2)
 		_:
 			# 生成在街区外沿的人行道上，避开建筑与树木
-			var cells := [Vector2i(0, 3), Vector2i(1, 2), Vector2i(2, 3), Vector2i(3, 1), Vector2i(2, 2)]
-			var c: Vector2i = cells[randi() % cells.size()]
-			var base := Data.cell_center(c)
-			var dirs := [Vector3(19, 0, 0), Vector3(-19, 0, 0), Vector3(0, 0, 19), Vector3(0, 0, -19)]
-			var d: Vector3 = dirs[randi() % dirs.size()]
-			return base + d + Vector3(randf_range(-2.0, 2.0), 0, randf_range(-2.0, 2.0))
+			return Data.sidewalk_point(Vector2i(randi() % Data.GRID, randi() % Data.GRID), randi() % 4)
 
 
 func mission_progress(mid: int, amount: float) -> void:
@@ -696,7 +697,7 @@ func add_heat(x: float) -> void:
 func clear_heat() -> void:
 	if heat <= 0.0:
 		return
-	var fine := int(heat * 220)
+	var fine := maxi(1, int(heat * 220))
 	if not try_spend(fine, "缴纳罚款"):
 		return
 	heat = 0.0
@@ -742,6 +743,7 @@ func reset_new_game() -> void:
 	weapon_ammo.clear()
 	player_state = {"position": Vector3(2, 0.3, 14), "yaw": 0.0, "pitch": 0.0}
 	_mission_seq = 0
+	explored_places.clear()
 	active_vehicle = -1
 	shops.clear()
 	missions.clear()
@@ -761,6 +763,8 @@ func snapshot() -> Dictionary:
 		"weapons_owned": weapons_owned.duplicate(true), "weapon": weapon,
 		"weapon_ammo": weapon_ammo.duplicate(true), "stats": stats.duplicate(true),
 		"player_state": player_state.duplicate(true), "mission_seq": _mission_seq,
+		"explored_places": explored_places.duplicate(),
+		"city_grid": Data.GRID,
 	}
 
 
@@ -789,6 +793,7 @@ func load_game(notify := true) -> bool:
 	for key in ["cash", "bank", "job", "gang", "health", "stamina", "heat", "day", "clock", "properties", "vehicles", "shops", "missions", "weapons_owned", "weapon", "weapon_ammo", "stats", "player_state"]:
 		set(key, state[key])
 	_mission_seq = int(state["mission_seq"])
+	explored_places = state.get("explored_places", []).duplicate()
 	active_vehicle = -1
 	_decay_shop_rent()
 	if notify or recovered:

@@ -50,7 +50,7 @@ func _draw() -> void:
 			var c := Data.cell_center(Vector2i(i, j))
 			var tl := w2s(c + Vector3(-Data.BLOCK * 0.5, 0, -Data.BLOCK * 0.5))
 			var br := w2s(c + Vector3(Data.BLOCK * 0.5, 0, Data.BLOCK * 0.5))
-			var is_park := (i == 1 and j == 2)
+			var is_park := Data.is_park_cell(Vector2i(i, j))
 			var col := Color(0.12, 0.20, 0.13) if is_park else Color(0.13, 0.145, 0.16)
 			draw_rect(Rect2(tl, br - tl), col, true)
 

@@ -6,6 +6,7 @@ New content added on the `zugsj666` branch:
 | --- | --- | --- |
 | Modular fallback facades, frames, windows, rooftop props | Original geometry in `scripts/core/procedural_assets.gd` | Repository Unlicense |
 | Fallback people and Idle/Walk/Run/Death animation tracks | Original geometry and keyframes in the same script | Repository Unlicense |
+| Footsteps, gunfire, reload, horn, engine, ambient city noise and UI cue | Original deterministic synthesis in `scripts/core/game_audio.gd` | Repository Unlicense |
 
 These are generated locally and require no downloads. When the optional Quaternius
 packs are present, the original glTF loading path continues to use them.

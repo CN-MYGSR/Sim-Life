@@ -17,6 +17,7 @@ var body_root: Node3D
 var _steer_visual: float = 0.0
 var _cam_base_z: float = 7.8
 var _paint_material: StandardMaterial3D
+var engine_audio: AudioStreamPlayer3D
 
 const GRAV := 22.0
 const MAX_REVERSE := 7.0
@@ -164,6 +165,7 @@ func _build(vdata: Dictionary) -> void:
 	cam.rotation.x = -0.13
 	add_child(cam)
 	cam.current = false
+	engine_audio = GameAudio.engine_player(self)
 
 
 func _emissive(c: Color) -> StandardMaterial3D:
@@ -188,6 +190,8 @@ func _physics_process(delta: float) -> void:
 		velocity.y = -0.5
 
 	if not driven:
+		if engine_audio.playing:
+			engine_audio.stop()
 		# 未驾驶时缓慢停下
 		speed = move_toward(speed, 0.0, 8.0 * delta)
 		velocity.x = -transform.basis.z.x * speed
@@ -196,6 +200,10 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var blocked: bool = not is_instance_valid(driver) or driver.in_ui
+	if not engine_audio.playing:
+		engine_audio.play()
+	engine_audio.pitch_scale = 0.8 + absf(speed) / 18.0
+	engine_audio.volume_db = -24 + minf(absf(speed), 20) * 0.35
 	var throttle := 0.0 if blocked else Input.get_action_strength("move_forward") - Input.get_action_strength("move_back")
 	var steer_in := 0.0 if blocked else Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
 
@@ -287,6 +295,11 @@ func _safe_exit_position() -> Vector3:
 	capsule.height = 1.8
 	for offset in [Vector3(2.6, 0.2, 0), Vector3(-2.6, 0.2, 0), Vector3(0, 0.2, 4.2)]:
 		var candidate: Vector3 = global_transform * offset
+		var ground_query := PhysicsRayQueryParameters3D.create(candidate + Vector3(0, 3, 0), candidate - Vector3(0, 4, 0), 1)
+		var ground := get_world_3d().direct_space_state.intersect_ray(ground_query)
+		if ground.is_empty() or absf(ground["position"].y - global_position.y) > 1.5:
+			continue
+		candidate.y = ground["position"].y + 0.08
 		var query := PhysicsShapeQueryParameters3D.new()
 		query.shape = capsule
 		query.transform = Transform3D(Basis.IDENTITY, candidate + Vector3(0, 0.9, 0))
@@ -298,7 +311,9 @@ func _safe_exit_position() -> Vector3:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if driven and event.is_action_pressed("interact"):
+	if driven and is_instance_valid(driver) and not driver.in_ui and event.is_action_pressed("horn"):
+		GameAudio.play("horn", -16)
+	if driven and is_instance_valid(driver) and not driver.in_ui and event.is_action_pressed("interact"):
 		exit()
 		get_viewport().set_input_as_handled()
 

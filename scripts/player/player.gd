@@ -163,6 +163,9 @@ func _physics_process(delta: float) -> void:
 		_bob_t += delta * (6.0 + hspeed * 1.1)
 		_bob_amp = lerpf(_bob_amp, clampf(hspeed / RUN, 0.15, 1.0) * 0.055, delta * 8.0)
 		_step_timer += delta * hspeed
+		if _step_timer >= 2.2:
+			_step_timer = 0.0
+			GameAudio.play("step", -23 if _crouching else -17, 0.9 + hspeed * 0.035)
 	else:
 		_bob_amp = lerpf(_bob_amp, 0.0, delta * 6.0)
 	cam.position.y = sin(_bob_t * 2.0) * _bob_amp

@@ -21,6 +21,7 @@ var _decorating: bool = false
 var _decor_prop: String = ""
 var _debug_mode: bool = false
 var _autosave_t := 0.0
+var _last_sky_day_f := -1.0
 
 # 店铺经营
 var _biz_active: bool = false
@@ -527,10 +528,10 @@ func _can_operate(shop_id: String) -> bool:
 
 func _spawn_customers(shop_id: String) -> void:
 	var door: Vector3 = Game.place_pos(shop_id)
-	var count := 4 if shop_id == "diner" else 5
+	var shop := Game._find(Data.SHOPS, shop_id)
+	var count := 4 if shop.get("job") == "chef" else 5
 	for i in range(count):
-		var ang := randf() * TAU
-		var pos := door + Vector3(cos(ang) * 7.0, 0.2, sin(ang) * 7.0 + 5.0)
+		var pos := door + Vector3((i - 2) * 1.8, 0.2, 6.0)
 		var c: Color = PED_COLORS[randi() % PED_COLORS.size()]
 		var customer := NPC.spawn(npc_root, pos, "customer", c)
 		customer.lifetime = 30.0
@@ -541,7 +542,7 @@ func _finish_business() -> void:
 	if Game.hud:
 		Game.hud.set_hold(false, 0.0, "")
 	var income := 0
-	if _biz_shop == "diner":
+	if Game._find(Data.SHOPS, _biz_shop).get("job") == "chef":
 		income = randi_range(430, 690)
 	else:
 		income = randi_range(300, 520)
@@ -561,6 +562,12 @@ func _update_sky() -> void:
 	var warm := noon_f
 	sun.light_color = Color(1.0, 0.94 + warm * 0.05, 0.86 + warm * 0.12)
 	sun.visible = day_f > 0.02
+	# ProceduralSkyMaterial changes rebuild the sky radiance cubemap. Updating it
+	# every 0.12 s stalls older GPUs; keep continuous sun motion, quantize only
+	# sub-percent color/ambient changes so a cubemap can finish converging.
+	if absf(day_f - _last_sky_day_f) < 0.005:
+		return
+	_last_sky_day_f = day_f
 
 	sky_mat.sky_top_color = Color(0.055, 0.075, 0.15).lerp(Color(0.30, 0.50, 0.80), day_f)
 	sky_mat.sky_horizon_color = Color(0.10, 0.12, 0.19).lerp(Color(0.78, 0.84, 0.90), day_f)
@@ -595,12 +602,9 @@ func _intro() -> void:
 
 # ═══════════════ 环境 NPC ═══════════════
 func spawn_ambient_npcs() -> void:
-	for i in range(16):
+	for i in range(Data.GRID * Data.GRID):
 		var cell := Vector2i(randi() % Data.GRID, randi() % Data.GRID)
-		var c := Data.cell_center(cell)
-		var a := randf() * TAU
-		var r := randf_range(18.0, 21.0)
-		var pos := c + Vector3(cos(a) * r, 0.15, sin(a) * r)
+		var pos := Data.sidewalk_point(cell, i % 4) + Vector3(0, 0.15, 0)
 		var col: Color = PED_COLORS[randi() % PED_COLORS.size()]
 		NPC.spawn(npc_root, pos, "pedestrian", col)
 
@@ -670,6 +674,11 @@ func _on_missions_changed() -> void:
 # ═══════════════ 输入 ═══════════════
 func _unhandled_input(event: InputEvent) -> void:
 	if _debug_mode:
+		return
+	if is_instance_valid(bank_layer):
+		if event.is_action_pressed("cancel"):
+			_close_bank()
+			get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("tablet"):
 		if is_instance_valid(tablet):
@@ -852,6 +861,7 @@ func enter_decorate(pid: String) -> void:
 	_decorating = true
 	_decor_prop = pid
 	player.decor_mode = true
+	player.locked = true
 	player.in_ui = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_rebuild_furniture()
@@ -867,6 +877,7 @@ func exit_decorate() -> void:
 	_decorating = false
 	_decor_prop = ""
 	player.decor_mode = false
+	player.locked = false
 	player.in_ui = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if is_instance_valid(decor_ui):
@@ -1013,6 +1024,27 @@ func rest_at_park() -> void:
 	Game.stamina = 100.0
 	Game.health = minf(100.0, Game.health + 20.0)
 	Game.toast.emit("在长椅上歇了一会儿，体力恢复", "ok")
+
+
+func on_property_door(prop_id: String) -> void:
+	if Game.owns_property(prop_id):
+		Game.health = 100.0
+		Game.stamina = 100.0
+		Game.toast.emit("欢迎回家，状态已恢复。走进屋内按 B 装修。", "ok")
+	else:
+		tablet.open("property")
+
+
+func discover_place(place_id: String) -> void:
+	var place := Game._find(Data.PLACES, place_id)
+	if place.is_empty():
+		return
+	if place_id not in Game.explored_places:
+		Game.explored_places.append(place_id)
+		Game.add_cash(75, "城市探索 · %s" % place["name"])
+	else:
+		Game.toast.emit("%s：楼内可以自由探索" % place["name"], "ok")
+	Game.stamina = minf(100, Game.stamina + 15)
 
 
 # ═══════════════ 银行 ═══════════════

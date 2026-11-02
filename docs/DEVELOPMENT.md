@@ -63,3 +63,32 @@ and path pruning. Furniture collision shapes and existing facade batching remain
 The four-block-per-side scene now has about 3,000 nodes instead of about 6,100 with the
 fallback visuals. Raw runs are kept locally; renderer-specific comparisons still require
 an identical camera, seed, viewport and warmup. No FPS gain is claimed from node count alone.
+
+## Six-by-six city and playable content
+
+The city is now 362 m square: 36 occupied blocks, 27 enterable public buildings,
+8 purchasable houses and 4 parks. Additions include apartment interiors, three rented
+shops, a cafe, clinic, post office, library, workshop, college, museum and community center.
+Postal work requires pickup before delivery/payment and supports loading mid-delivery.
+Landmarks award a one-time exploration reward, and owned homes restore health/stamina.
+Pedestrians spawn on sidewalk corners and follow perimeter routes rather than spawning
+inside buildings. Distant skeletal animation is suspended beyond 120 m; physics stays active.
+
+Original synthesized effects cover footsteps, gunfire, reload, engine, horn, UI and a quiet
+city bed. A fixed pool bounds simultaneous UI/weapon sounds. Real audio output is still
+unverified in this Windows session (use `--audio-driver Dummy` for graphical automated runs).
+Weapon scenes already contain their forward rotation; applying it a second time was removed,
+as was the doubled hand offset. The muzzle flash follows the actual transformed muzzle.
+
+The real-input gameplay suite exposed an additional exit bug: after a vehicle settled on its
+collision body, all exit candidates intersected the ground. Exit candidates now raycast the
+ground, reject large drops/rises, and test the standing capsule. Actual driving/exit passes.
+The gameplay suite also verifies all mission types, UI blocking, a wall blocking fire interaction,
+new-cafe income, lease expiry canceling a shift, and customer reclamation.
+
+Latest automated results: 62 scripts/scenes and their declared resource dependencies load
+without errors; 64 state/scene regression checks, 23 actual-input gameplay checks, and
+78 door/stair collision checks pass, together with the existing weapon-quiz UI suite.
+The broader resource audit found a MAC-10 material still pointing at an absent source
+import directory. It now uses the already bundled weapon material; all four weapons are
+explicitly equipped and checked by regression tests. No external replacement was downloaded.

@@ -386,7 +386,7 @@ func _on_toast(text: String, kind: String) -> void:
 
 	toast_box.add_child(p)
 	p.modulate.a = 0.0
-	var tw := create_tween()
+	var tw := p.create_tween()
 	tw.tween_property(p, "modulate:a", 1.0, 0.18)
 	tw.tween_interval(2.8)
 	tw.tween_property(p, "modulate:a", 0.0, 0.45)

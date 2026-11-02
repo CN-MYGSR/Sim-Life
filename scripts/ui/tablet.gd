@@ -208,6 +208,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _show_page(id: String) -> void:
+	GameAudio.play("ui", -24)
 	current_page = id
 	expanded_vehicle = -1
 	_update_nav()

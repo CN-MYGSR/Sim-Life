@@ -65,17 +65,30 @@ func _run() -> void:
 	await get_tree().physics_frame
 	expect(world.builder.kit_buildings.size() >= 12, "public buildings generated")
 	expect(world.builder.kit_buildings[0].batched_boxes > 0, "static furniture batching is active")
+	var occupied := {}
+	for place in Data.PLACES:
+		occupied[place["cell"]] = true
+	for property in Data.PROPERTIES:
+		occupied[property["cell"]] = true
+	expect(Data.GRID >= 6 and occupied.size() == Data.GRID * Data.GRID, "all 36 city blocks have usable places or homes")
+	expect(Game.places.has("post") and Game.places.has("east_park"), "new building and park destinations registered")
+	expect(GameAudio.sounds["shot"].data.size() > 1000 and GameAudio.voices.size() == 12, "synthesized audio and bounded voice pool initialized")
 	expect(KitLib.mesh_of("Brick_Window_Trim_Single") != null, "missing kit has visible mesh")
 	var actor := CharacterModel.create("__missing_test_character")
 	add_child(actor)
 	expect(actor.anim_player != null and actor.anim_player.has_animation("Walk"), "missing character has animated fallback")
 	actor.queue_free()
+	Game.set_process(true)
 	world._toggle_pause()
 	var clock_before: float = Game.clock
 	await get_tree().create_timer(0.15, true).timeout
 	expect(get_tree().paused and Game.clock == clock_before, "pause freezes simulation")
 	world._close_pause()
 	expect(not get_tree().paused and not world.player.in_ui, "resume restores controls")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	expect(Game.clock > clock_before, "resumed simulation clock advances")
+	Game.set_process(false)
 	Game.cash = 100000
 	Game.buy_vehicle("sedan")
 	var vehicle: Vehicle = world.vehicles_root.get_child(0)
@@ -122,6 +135,23 @@ func _run() -> void:
 	Game.player.weapon_sys.mag = 2
 	Game.equip_weapon("glock")
 	expect(Game.player.weapon_sys.mag == 2, "equipping same weapon does not refill magazine")
+	var weapon_system: WeaponSystem = Game.player.weapon_sys
+	expect(weapon_system.muzzle.position.z < 0 and weapon_system.model_root.get_child(0).rotation.is_zero_approx(), "baked weapon orientation and muzzle face camera forward")
+	var range_origin := Data.sidewalk_point(Vector2i(0, 0), 0) + Vector3(0, 0.2, 0)
+	world.player.teleport(range_origin)
+	world.player.rotation = Vector3.ZERO
+	var target := NPC.spawn(world.npc_root, range_origin + Vector3(0, 0, -6), "pedestrian", Color.WHITE)
+	target.set_physics_process(false)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	world.player.cam.look_at(target.global_position + Vector3(0, 0.9, 0))
+	weapon_system._fire()
+	expect(target.health < 100 and weapon_system.mag == 1, "real weapon ray damages NPC and consumes round")
+	target.queue_free()
+	for id in ["m4", "ak", "mac10"]:
+		Game.give_weapon(id)
+		Game.equip_weapon(id)
+		expect(weapon_system.weapon_id == id and weapon_system.model_root.get_child_count() == 1 and weapon_system.muzzle.position.z < 0, id + " model equips with forward-facing muzzle")
 	Game.save_path = "res://.artifacts/regression.save"
 	expect(Game.save_game(false), "save writes and verifies snapshot")
 	var saved_cash: int = Game.cash
@@ -144,6 +174,48 @@ func _run() -> void:
 	corrupt.close()
 	Game.cash = 777
 	expect(not Game.load_game(false) and Game.cash == 777, "unreadable saves never reset current game")
+	Game.save_path = "user://saves/city.save"
+	Game.health = 80
+	world._last_sky_day_f = -1
+	world._update_sky()
+	var sky_update: float = world._last_sky_day_f
+	world._update_sky()
+	expect(world._last_sky_day_f == sky_update, "unchanged daylight does not rebuild sky radiance")
+	Game.cash = 100000
+	Game.buy_property("apt201")
+	expect(Game.add_furniture("apt201", "sofa", center, 0), "furniture ready for scene restoration")
+	Game.set_job("courier")
+	mission = Game.accept_mission("parcel")
+	expect(not mission.is_empty() and mission["target"].is_equal_approx(Game.place_pos("post")), "courier starts at post office")
+	var parcel: MissionTarget = world.missions_root.get_child(world.missions_root.get_child_count() - 1)
+	cash_before = Game.cash
+	parcel._finish()
+	expect(mission["progress"] == 1.0 and Game.cash == cash_before and not parcel.done, "pickup advances stage without paying")
+	Game.save_path = "res://.artifacts/city-restore.save"
+	expect(Game.save_game(false), "mid-delivery state saved")
+	world.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	expect(Game.world == null and Game.player == null, "scene teardown clears global references")
+	expect(Game.load_game(false), "mid-delivery save loads")
+	world = load("res://scenes/main.tscn").instantiate()
+	add_child(world)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	expect(world.decor_root.get_child_count() == 1 and world.vehicles_root.get_child_count() == 1, "scene reconstructs furniture and vehicles")
+	expect(world.missions_root.get_child_count() == 1, "scene reconstructs in-progress delivery")
+	parcel = world.missions_root.get_child(0)
+	expect(parcel.prompt_text.contains("交付"), "loaded parcel resumes delivery rather than pickup")
+	cash_before = Game.cash
+	parcel._finish()
+	expect(Game.missions.is_empty() and Game.cash == cash_before + 420, "delivered parcel pays exactly once")
+	cash_before = Game.cash
+	world.discover_place("museum")
+	world.discover_place("museum")
+	expect(Game.cash == cash_before + 75, "landmark discovery only rewards first visit")
+	world.player.teleport(center)
+	world.on_property_door("apt201")
+	expect(Game.health == 100 and Game.stamina == 100, "owned home provides rest interaction")
 	Game.save_path = "user://saves/city.save"
 	world.queue_free()
 	await get_tree().process_frame

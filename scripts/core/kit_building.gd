@@ -123,7 +123,7 @@ func _side(f: int, y: float, front: bool) -> void:
 		if front and f == 0 and i == door_slot:
 			_place_open_door(x, y, z)
 	if f == floors - 1:
-		_cornice_line(true)
+		_cornice_line(front)
 
 
 func _side_x(f: int, y: float, dir: float) -> void:
@@ -343,8 +343,8 @@ func _build_stairs() -> void:
 # ─────────────────────────── 内饰 ───────────────────────────
 func _build_interior() -> void:
 	# 家具类型（deco 楼按用途细分）
-	var fkind := kind
-	if kind == "deco":
+	var fkind: String = str(place.get("interior", kind))
+	if kind == "deco" and not place.has("interior"):
 		var id := str(place.get("id", ""))
 		if id == "deco_a":
 			fkind = "deco_office"
@@ -568,6 +568,8 @@ func _style_for(k: String) -> String:
 
 
 func _floors_for(k: String, p: Dictionary) -> int:
+	if p.has("floors"):
+		return clampi(int(p["floors"]), 2, 4)
 	match k:
 		"diner", "mart", "shopfront": return 2
 		"hospital", "bank": return 4

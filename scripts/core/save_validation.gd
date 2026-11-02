@@ -3,6 +3,16 @@ class_name SaveValidation
 ## Reject malformed snapshots before changing any live state.
 
 static func valid(state: Dictionary) -> bool:
+	if state.has("city_grid") and state["city_grid"] != Data.GRID:
+		return false
+	var explored = state.get("explored_places", [])
+	if not explored is Array or explored.size() > Data.PLACES.size():
+		return false
+	var unique_places := []
+	for place_id in explored:
+		if not place_id is String or Game._find(Data.PLACES, place_id).is_empty() or place_id in unique_places:
+			return false
+		unique_places.append(place_id)
 	for key in ["cash", "bank", "day"]:
 		if not _number(state.get(key), 0 if key != "day" else 1, 1000000000):
 			return false
@@ -73,7 +83,7 @@ static func valid(state: Dictionary) -> bool:
 		if not mission is Dictionary or not Data.MISSION_TYPES.has(mission.get("type", "")):
 			return false
 		var template: Dictionary = Data.MISSION_TYPES[mission["type"]]
-		var need := 3 if mission["type"] == "patrol" else 1
+		var need := 3 if mission["type"] == "patrol" else (2 if mission["type"] == "parcel" else 1)
 		if mission.get("reward") != template["reward"] or mission.get("need") != need or mission.get("heat") != template["heat"] or template["job"] != state["job"]:
 			return false
 		if not _position(mission.get("target")) or not _number(mission.get("progress"), 0, need - 0.00001) or not mission.get("meta") is Dictionary:
@@ -82,6 +92,8 @@ static func valid(state: Dictionary) -> bool:
 			return false
 		mission_ids.append(int(mission["id"]))
 		mission_types.append(mission["type"])
+		if mission["type"] == "parcel" and not _position(mission.get("delivery_target")):
+			return false
 		if mission["type"] == "patrol":
 			if not mission.get("targets") is Array or mission["targets"].size() != 3:
 				return false

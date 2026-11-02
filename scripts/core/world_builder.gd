@@ -143,7 +143,7 @@ func _make_blocks() -> void:
 	for i in range(Data.GRID):
 		for j in range(Data.GRID):
 			var c := Data.cell_center(Vector2i(i, j))
-			var is_park := (i == 1 and j == 2)
+			var is_park := Data.is_park_cell(Vector2i(i, j))
 			var col := Color(0.30, 0.42, 0.26) if is_park else C_SIDEWALK
 			box(root, Vector3(c.x, -0.01, c.z), Vector3(Data.BLOCK, 0.02, Data.BLOCK), col, false, 0.0, 0.95)
 
@@ -154,6 +154,7 @@ func _make_places() -> void:
 		var c := Data.cell_center(p["cell"])
 		var sz: Vector2 = p["size"]
 		if p["kind"] == "park" or p["kind"] == "parking" or sz == Vector2.ZERO:
+			Game.register_place(p["id"], c + Vector3(0, 0, 20))
 			continue
 		_make_one_place(c, p)
 
@@ -184,12 +185,12 @@ func _make_one_place(c: Vector3, p: Dictionary) -> void:
 		"police": prompt = "警局 · 查看勤务"; cb = Callable(host, "open_job_panel").bind("police")
 		"fire": prompt = "消防站 · 查看勤务"; cb = Callable(host, "open_job_panel").bind("firefighter")
 		"hospital": prompt = "医院 · 查看勤务"; cb = Callable(host, "open_job_panel").bind("doctor")
-		"diner": prompt = "日落餐厅 · 店铺"; cb = Callable(host, "open_shop_panel").bind("diner")
-		"mart": prompt = "便利店 · 店铺"; cb = Callable(host, "open_shop_panel").bind("mart")
-		"shopfront": prompt = "空置商铺 · 店铺"; cb = Callable(host, "open_shop_panel").bind("shopfront")
+		"diner", "mart", "shopfront": prompt = str(p["name"]) + " · 店铺"; cb = Callable(host, "open_shop_panel").bind(str(p["id"]))
 		"garage": prompt = "车行 · 购车与改装"; cb = Callable(host, "open_vehicle_panel")
 		"bank": prompt = "银行 · 存取款"; cb = Callable(host, "open_bank_panel")
 		"gang": prompt = "仓库 · 帮派事务"; cb = Callable(host, "open_gang_panel")
+		"post": prompt = "邮局 · 快递工作"; cb = Callable(host, "open_job_panel").bind("courier")
+		"deco": prompt = str(p["name"]) + " · 探索"; cb = Callable(host, "discover_place").bind(str(p["id"]))
 	if cb.is_valid():
 		Interactable.create(g, Vector3(0, 1.4, d * 0.5 + 2.2), Vector3(3.4, 2.8, 1.6), prompt, cb)
 		box(g, Vector3(0, 0.012, d * 0.5 + 2.2), Vector3(2.4, 0.02, 2.4), Color(0.20, 0.42, 0.68), false, 0.0, 0.7)
@@ -230,7 +231,9 @@ func _make_house(c: Vector3, p: Dictionary) -> void:
 	box(g, Vector3(0, h + 0.15, 0), Vector3(w + 1.0, 0.3, d + 1.0), col.darkened(0.35), false, 0.0, 0.9)
 	box(g, Vector3(0, h + 0.5, 0), Vector3(w * 0.7, 0.4, d * 0.7), col.darkened(0.45), false, 0.0, 0.9)
 	# 门框
-	box(g, Vector3(0, 1.4, d * 0.5), Vector3(door_w + 0.3, 2.8, 0.18), Color(0.20, 0.16, 0.13), false, 0.0, 0.7)
+	for x in [-door_w * 0.5, door_w * 0.5]:
+		box(g, Vector3(x, 1.4, d * 0.5), Vector3(0.15, 2.8, 0.18), Color(0.20, 0.16, 0.13), false)
+	box(g, Vector3(0, 2.8, d * 0.5), Vector3(door_w + 0.3, 0.15, 0.18), Color(0.20, 0.16, 0.13), false)
 	# 窗（外立面装饰）
 	box(g, Vector3(-w * 0.28, 3.0, d * 0.5 + 0.02), Vector3(2.2, 1.6, 0.1), Color(0.10, 0.16, 0.24), false, 0.0, 0.15)
 	box(g, Vector3(w * 0.28, 3.0, d * 0.5 + 0.02), Vector3(2.2, 1.6, 0.1), Color(0.10, 0.16, 0.24), false, 0.0, 0.15)
@@ -265,7 +268,13 @@ func _make_house(c: Vector3, p: Dictionary) -> void:
 
 # ═══════════════ 公园与停车场 ═══════════════
 func _make_park_decor() -> void:
-	var c := Data.cell_center(Vector2i(1, 2))
+	for place in Data.PLACES:
+		if place["kind"] == "park":
+			_decorate_park(place)
+
+
+func _decorate_park(place: Dictionary) -> void:
+	var c := Data.cell_center(place["cell"])
 	# 小池塘
 	var pond := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
@@ -289,7 +298,7 @@ func _make_park_decor() -> void:
 		var p := c + Vector3(cos(ang) * 9.0, 0, sin(ang) * 9.0)
 		_make_bench(p, -ang)
 	# 公园交互点
-	Interactable.create(root, c + Vector3(0, 1.2, -13), Vector3(5, 2.4, 3), "公园长椅 · 休息",
+	Interactable.create(root, c + Vector3(0, 1.2, -13), Vector3(5, 2.4, 3), str(place["name"]) + " · 休息",
 		Callable(host, "rest_at_park"))
 	# 静态动物装饰（Lo Polly animals FREE：纯模型，无动画）
 	_make_animal(c + Vector3(-8.0, 0.12, 2.0), "Swan", 0.7)
@@ -473,6 +482,7 @@ func _make_clouds() -> void:
 			sm.radial_segments = 10
 			sm.rings = 6
 			s.mesh = sm
+			s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			s.material_override = cm
 			s.position = Vector3(rng2.randf_range(-26, 26), rng2.randf_range(-3, 3), rng2.randf_range(-18, 18))
 			s.scale = Vector3(1.0, 0.30, 1.0)

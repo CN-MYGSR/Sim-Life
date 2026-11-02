@@ -56,6 +56,11 @@ func setup(m: Dictionary) -> void:
 			hold_need = 1.2
 			prompt_text = "按住 E 交付货物"
 			_make_crate()
+		"parcel":
+			radius = 4.0
+			hold_need = 1.5
+			prompt_text = "按住 E 领取包裹" if float(m["progress"]) < 1 else "按住 E 交付包裹"
+			_make_crate()
 		"rob":
 			radius = 4.0
 			hold_need = 4.0
@@ -276,6 +281,14 @@ func _release_hold(delta: float) -> void:
 
 func _finish() -> void:
 	if done:
+		return
+	if mtype == "parcel" and float(mission["progress"]) < 1:
+		Game.mission_progress(mid, 1.0)
+		mission["target"] = mission["delivery_target"]
+		global_position = mission["target"]
+		hold = 0.0
+		prompt_text = "按住 E 交付包裹"
+		Game.toast.emit("包裹已领取，前往地图上的收件点", "ok")
 		return
 	done = true
 	if mtype == "patrol":

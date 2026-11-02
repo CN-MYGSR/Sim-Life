@@ -74,20 +74,37 @@ const JOBS := {
 		"color": Color(0.64, 0.45, 0.95),
 		"need_shop": "",
 	},
+	"courier": {
+		"name": "城市快递员", "short": "快递", "salary": 180,
+		"desc": "到南城邮局领取包裹，步行或驾驶送往全城收件点，完成两段交接后结算。",
+		"color": Color(0.95, 0.72, 0.22), "need_shop": "",
+	},
 }
 
-const JOB_ORDER := ["unemployed", "police", "firefighter", "doctor", "chef", "clerk", "gangster"]
+const JOB_ORDER := ["unemployed", "police", "firefighter", "doctor", "chef", "clerk", "courier", "gangster"]
 
 # ─────────────────────────── 城市网格 ───────────────────────────
 const BLOCK := 44.0      # 街区边长
 const ROAD := 14.0       # 道路宽度
-const GRID := 4          # 4x4 街区
+const GRID := 6          # 6x6 街区，362 x 362 metres
 const CELL_PITCH := BLOCK + ROAD
 
 ## 街区中心世界坐标
 static func cell_center(cell: Vector2i) -> Vector3:
 	var half := (GRID - 1) * 0.5
 	return Vector3((cell.x - half) * CELL_PITCH, 0.0, (cell.y - half) * CELL_PITCH)
+
+
+static func is_park_cell(cell: Vector2i) -> bool:
+	for place in PLACES:
+		if place["cell"] == cell and place["kind"] == "park":
+			return true
+	return false
+
+
+static func sidewalk_point(cell: Vector2i, corner: int) -> Vector3:
+	var corners := [Vector3(-20.5, 0, -20.5), Vector3(20.5, 0, -20.5), Vector3(20.5, 0, 20.5), Vector3(-20.5, 0, 20.5)]
+	return cell_center(cell) + corners[posmod(corner, 4)]
 
 ## 城市外半径（用于地图绘制）
 const CITY_HALF := (GRID * BLOCK + (GRID + 1) * ROAD) * 0.5
@@ -123,6 +140,24 @@ const PLACES := [
 		"size": Vector2(36, 36), "height": 0.0, "color": Color(0.22, 0.23, 0.26), "sign": ""},
 	{"id": "deco_d", "name": "厂房", "kind": "deco", "cell": Vector2i(3, 3),
 		"size": Vector2(32, 26), "height": 12.0, "color": Color(0.36, 0.34, 0.32), "sign": ""},
+	{"id": "community", "name": "东城社区中心", "kind": "deco", "cell": Vector2i(4, 0), "size": Vector2(26, 22), "height": 9.0, "color": Color(0.60, 0.50, 0.40), "sign": "COMMUNITY", "interior": "deco_office"},
+	{"id": "clinic", "name": "东区诊所", "kind": "hospital", "cell": Vector2i(5, 0), "size": Vector2(22, 18), "height": 9.0, "color": Color(0.65, 0.67, 0.62), "sign": "EAST CLINIC", "floors": 2},
+	{"id": "east_apts", "name": "晨光公寓", "kind": "deco", "cell": Vector2i(4, 1), "size": Vector2(28, 24), "height": 12.0, "color": Color(0.55, 0.43, 0.36), "sign": "DAWN HOMES", "interior": "deco_apartment", "floors": 4},
+	{"id": "east_park", "name": "晨光花园", "kind": "park", "cell": Vector2i(5, 1), "size": Vector2(36, 36), "height": 0.0, "color": Color(0.26, 0.43, 0.29), "sign": ""},
+	{"id": "east_mart", "name": "东城生鲜店", "kind": "mart", "cell": Vector2i(4, 2), "size": Vector2(24, 18), "height": 6.0, "color": Color(0.34, 0.50, 0.35), "sign": "FRESH MARKET"},
+	{"id": "east_diner", "name": "晨光咖啡馆", "kind": "diner", "cell": Vector2i(5, 2), "size": Vector2(24, 18), "height": 6.0, "color": Color(0.63, 0.43, 0.27), "sign": "DAWN CAFE"},
+	{"id": "east_garage", "name": "东区维修站", "kind": "garage", "cell": Vector2i(4, 3), "size": Vector2(28, 22), "height": 9.0, "color": Color(0.42, 0.45, 0.47), "sign": "EAST WORKSHOP"},
+	{"id": "depot", "name": "东城物流中心", "kind": "deco", "cell": Vector2i(5, 3), "size": Vector2(30, 24), "height": 6.0, "color": Color(0.42, 0.43, 0.38), "sign": "LOGISTICS", "interior": "deco_warehouse", "floors": 2},
+	{"id": "post", "name": "南城邮局", "kind": "post", "cell": Vector2i(0, 4), "size": Vector2(24, 20), "height": 6.0, "color": Color(0.60, 0.48, 0.23), "sign": "CITY POST"},
+	{"id": "library", "name": "市民图书馆", "kind": "deco", "cell": Vector2i(1, 4), "size": Vector2(28, 24), "height": 9.0, "color": Color(0.55, 0.51, 0.43), "sign": "CITY LIBRARY", "interior": "deco_office"},
+	{"id": "south_apts", "name": "南城居民楼", "kind": "deco", "cell": Vector2i(2, 4), "size": Vector2(28, 24), "height": 12.0, "color": Color(0.48, 0.44, 0.42), "sign": "SOUTH HOMES", "interior": "deco_apartment", "floors": 4},
+	{"id": "south_green", "name": "南城绿地", "kind": "park", "cell": Vector2i(4, 4), "size": Vector2(36, 36), "height": 0.0, "color": Color(0.26, 0.43, 0.29), "sign": ""},
+	{"id": "workshop", "name": "手工工坊", "kind": "deco", "cell": Vector2i(5, 4), "size": Vector2(28, 24), "height": 6.0, "color": Color(0.50, 0.38, 0.28), "sign": "MAKERS", "interior": "deco_warehouse", "floors": 2},
+	{"id": "west_green", "name": "日落休闲公园", "kind": "park", "cell": Vector2i(0, 5), "size": Vector2(36, 36), "height": 0.0, "color": Color(0.26, 0.43, 0.29), "sign": ""},
+	{"id": "college", "name": "社区夜校", "kind": "deco", "cell": Vector2i(1, 5), "size": Vector2(28, 22), "height": 9.0, "color": Color(0.50, 0.42, 0.36), "sign": "CITY COLLEGE", "interior": "deco_office"},
+	{"id": "market", "name": "南城街角商店", "kind": "mart", "cell": Vector2i(3, 5), "size": Vector2(26, 20), "height": 6.0, "color": Color(0.38, 0.49, 0.42), "sign": "SOUTH MARKET"},
+	{"id": "museum", "name": "城市记忆馆", "kind": "deco", "cell": Vector2i(4, 5), "size": Vector2(28, 24), "height": 9.0, "color": Color(0.62, 0.58, 0.50), "sign": "CITY MUSEUM", "interior": "deco_office"},
+	{"id": "south_tower", "name": "南湾公寓", "kind": "deco", "cell": Vector2i(5, 5), "size": Vector2(28, 24), "height": 12.0, "color": Color(0.48, 0.51, 0.56), "sign": "SOUTH BAY", "interior": "deco_apartment", "floors": 4},
 ]
 
 # ─────────────────────────── 可购买房产 ───────────────────────────
@@ -138,6 +173,9 @@ const PROPERTIES := [
 		"size": Vector2(18, 18), "price": 26500, "rooms": "三室两厅 · 车库", "color": Color(0.62, 0.60, 0.55)},
 	{"id": "loft", "name": "市中心阁楼", "cell": Vector2i(3, 1), "offset": Vector3(0, 0, 12),
 		"size": Vector2(20, 14), "price": 34000, "rooms": "复式阁楼", "color": Color(0.38, 0.40, 0.46)},
+	{"id": "south_cottage", "name": "南城花园住宅", "cell": Vector2i(3, 4), "offset": Vector3(-10, 0, 0), "size": Vector2(18, 18), "price": 12500, "rooms": "两室 · 花园街区", "color": Color(0.60, 0.50, 0.39)},
+	{"id": "south_house", "name": "南城邻里住宅", "cell": Vector2i(3, 4), "offset": Vector3(10, 0, 0), "size": Vector2(18, 18), "price": 14500, "rooms": "两室 · 临近绿地", "color": Color(0.50, 0.56, 0.48)},
+	{"id": "townhouse", "name": "日落联排住宅", "cell": Vector2i(2, 5), "offset": Vector3.ZERO, "size": Vector2(26, 22), "price": 22500, "rooms": "三室 · 南城街景", "color": Color(0.57, 0.43, 0.36)},
 ]
 
 # ─────────────────────────── 可租店铺 ───────────────────────────
@@ -148,6 +186,9 @@ const SHOPS := [
 		"desc": "含货架与收银台。补货越勤，客流越旺。"},
 	{"id": "shopfront", "name": "空置商铺 · 整租", "cell": Vector2i(3, 2), "rent": 1500, "job": "clerk",
 		"desc": "位置偏但租金便宜，适合起步。"},
+	{"id": "east_mart", "name": "东城生鲜店 · 经营权", "cell": Vector2i(4, 2), "rent": 1800, "job": "clerk", "desc": "服务晨光住宅区的街角生鲜店。"},
+	{"id": "east_diner", "name": "晨光咖啡馆 · 厨房使用权", "cell": Vector2i(5, 2), "rent": 1600, "job": "chef", "desc": "花园旁的咖啡馆，租用后可接待顾客。"},
+	{"id": "market", "name": "南城街角商店 · 经营权", "cell": Vector2i(3, 5), "rent": 1700, "job": "clerk", "desc": "服务南城居民的便利店。"},
 ]
 
 # ─────────────────────────── 车辆 ───────────────────────────
@@ -300,6 +341,8 @@ const GANGS := [
 # ─────────────────────────── 任务 ───────────────────────────
 ## reward 为单次报酬；heat 为完成后增加的通缉度
 const MISSION_TYPES := {
+	"parcel": {"name": "城市包裹配送", "job": "courier", "reward": 420, "heat": 0.0,
+		"desc": "先到南城邮局取件，再把包裹交给地图上的收件点。"},
 	"patrol": {"name": "街区巡逻", "job": "police", "reward": 180, "heat": 0.0,
 		"desc": "依次前往 3 个巡逻点打卡，维护街区秩序。"},
 	"arrest": {"name": "追捕通缉犯", "job": "police", "reward": 340, "heat": 0.0,
@@ -309,14 +352,14 @@ const MISSION_TYPES := {
 	"heal": {"name": "紧急救护", "job": "doctor", "reward": 280, "heat": 0.0,
 		"desc": "前往伤员位置，按住 E 进行急救。"},
 	"capture": {"name": "抢占地盘", "job": "gangster", "reward": 520, "heat": 1.0,
-		"desc": "在标记点驻守 12 秒，把地盘从对家手里抢过来。"},
+		"desc": "在标记点连续驻守 8 秒，把地盘从对家手里抢过来。"},
 	"deliver": {"name": "走私送货", "job": "gangster", "reward": 460, "heat": 0.5,
 		"desc": "把货送到指定地点，途中别被警察拦下。"},
 	"rob": {"name": "洗劫便利店", "job": "gangster", "reward": 880, "heat": 2.0,
 		"desc": "前往便利店，按住 E 撬开收银台。会大幅提升通缉度。"},
 }
 
-const MISSION_ORDER := ["patrol", "arrest", "fire", "heal", "capture", "deliver", "rob"]
+const MISSION_ORDER := ["patrol", "arrest", "fire", "heal", "parcel", "capture", "deliver", "rob"]
 
 # ─────────────────────────── 杂项 ───────────────────────────
 const START_CASH := 2000

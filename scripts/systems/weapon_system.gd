@@ -20,6 +20,7 @@ var flash_t: float = 0.0
 var _recoil: float = 0.0
 var _bob: float = 0.0
 var _shoot_prev: bool = false
+var _hand_offset := Vector3(0.17, -0.17, -0.36)
 
 
 func _ready() -> void:
@@ -52,7 +53,7 @@ func _ready() -> void:
 	fm.emission_energy_multiplier = 3.0
 	flash.material_override = fm
 	flash.name = "Flash"
-	flash.position = Vector3(0, 0.03, -0.44)
+	flash.position = Vector3.ZERO
 	muzzle.add_child(flash)
 	flash_t = 0.0
 	_apply_weapon(Game.weapon)
@@ -110,12 +111,12 @@ func _build_model(id: String) -> void:
 			cfg = cat[id]
 	model_root.add_child(inst)
 	inst.scale = Vector3.ONE * float(cfg.get("scale", 1.0))
-	if cfg.has("grip_rotation"):
-		inst.rotation_degrees = cfg["grip_rotation"]
+	# Converted scenes already face -Z; source FBX rotation is baked into their meshes.
 	if cfg.has("grip_offset"):
-		inst.position = cfg["grip_offset"]
+		_hand_offset = cfg["grip_offset"]
+		inst.position = Vector3.ZERO
 	if cfg.has("muzzle_offset"):
-		muzzle.position = cfg["muzzle_offset"]
+		muzzle.position = inst.transform * (cfg["muzzle_offset"] as Vector3)
 
 
 func _fallback_model(id: String) -> Node3D:
@@ -186,7 +187,12 @@ func _process(delta: float) -> void:
 			_update_hud()
 	# 后坐力回弹
 	_recoil = lerpf(_recoil, 0.0, clampf(delta * 10.0, 0.0, 1.0))
-	holder.position = Vector3(0.27, -0.23 + _bob, -0.52) + Vector3(0, 0, _recoil)
+	holder.position = _hand_offset + Vector3(0, _bob, _recoil)
+	var reload_fraction := reload_t / 1.1
+	holder.rotation.z = sin(reload_fraction * PI) * -0.5
+	holder.position.y -= sin(reload_fraction * PI) * 0.18
+	if is_instance_valid(p):
+		_bob = sin(Time.get_ticks_msec() * 0.01) * minf(p.velocity.length(), 7.0) * 0.0015
 	# 枪口闪光计时
 	if flash_t > 0.0:
 		flash_t = maxf(0.0, flash_t - delta)
@@ -201,6 +207,7 @@ func _process(delta: float) -> void:
 	# 换弹
 	if Input.is_action_just_pressed("reload") and reload_t <= 0.0 and mag < mag_cap:
 		reload_t = 1.1
+		GameAudio.play("reload", -18)
 		Game.toast.emit("换弹中…", "warn")
 	# 开火
 	var auto := bool(data.get("auto", false))
@@ -209,6 +216,7 @@ func _process(delta: float) -> void:
 		return
 	if mag <= 0:
 		reload_t = 1.1
+		GameAudio.play("reload", -18)
 		Game.toast.emit("弹匣空了，换弹中…", "warn")
 		return
 	_fire()
@@ -224,6 +232,7 @@ func _can_use() -> bool:
 
 
 func _fire() -> void:
+	GameAudio.play("shot", -13, 1.12 if weapon_id == "glock" else 0.9)
 	mag -= 1
 	cooldown = float(data.get("rate", 0.15))
 	flash_t = 0.05

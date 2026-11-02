@@ -19,6 +19,9 @@ var _t: float = 0.0
 var _wander: float = 0.0
 var _actor: CharacterModel
 var _posed: bool = false
+var _route_corner := -1
+var _route_cell := Vector2i.ZERO
+var _detail_timer := 0.0
 
 
 static func spawn(parent: Node3D, pos: Vector3, p_kind: String, color: Color) -> NPC:
@@ -67,15 +70,26 @@ func _build_visual() -> void:
 
 
 func _pick_wander_target() -> void:
-	var a := randf() * TAU
-	var r := randf_range(6.0, 20.0)
-	target_pos = global_position + Vector3(cos(a) * r, 0, sin(a) * r)
-	var lim := Data.CITY_HALF - 8.0
-	target_pos.x = clampf(target_pos.x, -lim, lim)
-	target_pos.z = clampf(target_pos.z, -lim, lim)
+	if _route_corner < 0:
+		var half := (Data.GRID - 1) * 0.5
+		_route_cell = Vector2i(clampi(roundi(global_position.x / Data.CELL_PITCH + half), 0, Data.GRID - 1), clampi(roundi(global_position.z / Data.CELL_PITCH + half), 0, Data.GRID - 1))
+		var nearest := INF
+		for corner in range(4):
+			var distance := global_position.distance_squared_to(Data.sidewalk_point(_route_cell, corner))
+			if distance < nearest:
+				nearest = distance
+				_route_corner = corner
+	else:
+		_route_corner = (_route_corner + 1) % 4
+	target_pos = Data.sidewalk_point(_route_cell, _route_corner)
 
 
 func _physics_process(delta: float) -> void:
+	_detail_timer -= delta
+	if _detail_timer <= 0.0:
+		_detail_timer = 0.5
+		if is_instance_valid(_actor.anim_player) and is_instance_valid(Game.player):
+			_actor.anim_player.active = global_position.distance_squared_to(Game.player.global_position) < 120.0 * 120.0
 	if lifetime > 0.0:
 		lifetime -= delta
 		if lifetime <= 0.0:
@@ -120,7 +134,7 @@ func _physics_process(delta: float) -> void:
 		_wander -= delta
 		var to_t := target_pos - global_position
 		to_t.y = 0.0
-		if _wander <= 0.0 or to_t.length() < 1.5:
+		if to_t.length() < 1.5 or (is_on_wall() and _wander <= 0.0):
 			_wander = randf_range(2.5, 6.0)
 			_pick_wander_target()
 		elif to_t.length() > 0.5:

@@ -22,6 +22,10 @@ func _ready() -> void:
 	add_child(game_scene)
 	seed(20261102)
 	Game.clock = Data.START_HOUR / 24.0 * Data.DAY_LENGTH
+	Game.set_process(false)
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_size(Vector2i(1280, 720))
 	startup_ms = (Time.get_ticks_usec() - start) / 1000.0
 	print("BENCHMARK_READY startup_ms=", startup_ms, " output=", output)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -42,6 +46,7 @@ func _process(_delta: float) -> void:
 		var result := {
 			"engine": Engine.get_version_info().string,
 			"renderer": RenderingServer.get_current_rendering_method(),
+			"viewport": str(get_viewport().get_visible_rect().size),
 			"display": DisplayServer.get_name(),
 			"grid": Data.GRID, "warmup_frames": frames - samples.size(), "warmup_min_seconds": 3, "sample_frames": samples.size(),
 			"startup_ms": startup_ms, "frame_mean_ms": _mean(samples),
@@ -50,6 +55,8 @@ func _process(_delta: float) -> void:
 			"nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT),
 			"objects": Performance.get_monitor(Performance.OBJECT_COUNT),
 			"memory_static_bytes": Performance.get_monitor(Performance.MEMORY_STATIC),
+			"video_memory_bytes": Performance.get_monitor(Performance.RENDER_VIDEO_MEM_USED),
+			"gpu": RenderingServer.get_video_adapter_name(),
 			"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 			"rendered_objects": Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME),
 			"rendered_primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
