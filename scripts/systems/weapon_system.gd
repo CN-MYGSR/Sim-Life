@@ -63,6 +63,10 @@ func set_weapon(id: String) -> void:
 
 
 func _apply_weapon(id: String) -> void:
+	if id == weapon_id and not data.is_empty():
+		return
+	if weapon_id != "":
+		Game.weapon_ammo[weapon_id] = mag
 	weapon_id = id
 	reload_t = 0.0
 	cooldown = 0.0
@@ -83,7 +87,7 @@ func _apply_weapon(id: String) -> void:
 		return
 	holder.visible = true
 	mag_cap = int(data.get("mag", 12))
-	mag = mag_cap
+	mag = clampi(int(Game.weapon_ammo.get(id, mag_cap)), 0, mag_cap)
 	_build_model(id)
 	_update_hud()
 
@@ -161,6 +165,15 @@ func _fallback_model(id: String) -> Node3D:
 
 
 func _process(delta: float) -> void:
+	var pressed := Input.is_action_pressed("shoot")
+	var just := pressed and not _shoot_prev
+	_shoot_prev = pressed
+	if _can_use():
+		for i in range(4):
+			if Input.is_action_just_pressed("weapon_%d" % (i + 1)):
+				var ids := Game.own_weapon_list()
+				if i < ids.size():
+					Game.equip_weapon(ids[i])
 	if weapon_id == "":
 		return
 	var p = Game.player
@@ -185,21 +198,12 @@ func _process(delta: float) -> void:
 
 	if not _can_use():
 		return
-	# 切枪
-	for i in range(4):
-		if Input.is_action_just_pressed("weapon_%d" % (i + 1)):
-			var ids := Game.own_weapon_list()
-			if i < ids.size():
-				Game.equip_weapon(ids[i])
 	# 换弹
 	if Input.is_action_just_pressed("reload") and reload_t <= 0.0 and mag < mag_cap:
 		reload_t = 1.1
 		Game.toast.emit("换弹中…", "warn")
 	# 开火
 	var auto := bool(data.get("auto", false))
-	var pressed := Input.is_action_pressed("shoot")
-	var just := pressed and not _shoot_prev
-	_shoot_prev = pressed
 	var want := pressed if auto else just
 	if not want or cooldown > 0.0 or reload_t > 0.0:
 		return

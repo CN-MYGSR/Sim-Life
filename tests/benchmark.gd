@@ -10,6 +10,7 @@ var last_tick := 0
 var startup_ms := 0.0
 var game_scene: Node
 var output := "res://.artifacts/benchmark.json"
+var warmup_end := 0
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -22,25 +23,27 @@ func _ready() -> void:
 	seed(20261102)
 	Game.clock = Data.START_HOUR / 24.0 * Data.DAY_LENGTH
 	startup_ms = (Time.get_ticks_usec() - start) / 1000.0
+	print("BENCHMARK_READY startup_ms=", startup_ms, " output=", output)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	last_tick = Time.get_ticks_usec()
+	warmup_end = last_tick + 3000000
 
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_usec()
 	frames += 1
-	if frames > 120:
+	if frames > 120 and now >= warmup_end:
 		samples.append((now - last_tick) / 1000.0)
 		process_ms.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 		physics_ms.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 	last_tick = now
-	if frames == 720:
+	if samples.size() == 600:
 		var sorted := samples.duplicate()
 		sorted.sort()
 		var result := {
 			"engine": Engine.get_version_info().string,
 			"renderer": RenderingServer.get_current_rendering_method(),
 			"display": DisplayServer.get_name(),
-			"grid": Data.GRID, "warmup_frames": 120, "sample_frames": samples.size(),
+			"grid": Data.GRID, "warmup_frames": frames - samples.size(), "warmup_min_seconds": 3, "sample_frames": samples.size(),
 			"startup_ms": startup_ms, "frame_mean_ms": _mean(samples),
 			"frame_p50_ms": sorted[sorted.size() / 2], "frame_p95_ms": sorted[int(sorted.size() * 0.95)],
 			"process_mean_ms": _mean(process_ms), "physics_mean_ms": _mean(physics_ms),
@@ -60,6 +63,10 @@ func _process(_delta: float) -> void:
 		file.store_string(JSON.stringify(result, "\t"))
 		file.close()
 		print("BENCHMARK ", JSON.stringify(result))
+		set_process(false)
+		if DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png(output.get_basename() + ".png")
 		get_tree().quit()
 
 func _mean(values: Array[float]) -> float:

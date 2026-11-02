@@ -4,8 +4,8 @@ $logs = Join-Path $projectRoot '.artifacts'
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 $cases = @(
     @{ Name='import'; Args=@('--headless','--editor','--import','--quit') },
-    @{ Name='regression'; Args=@('--headless','--quit-after','3600','--scene','res://tests/regression.tscn','--','--seed=20261102') },
-    @{ Name='quiz'; Args=@('--headless','--quit-after','3600','--scene','res://tests/quiz_demo.tscn') }
+    @{ Name='regression'; Args=@('--headless','--quit-after','3600','--scene','res://tests/regression.tscn','--','--seed=20261102','--no-save') },
+    @{ Name='quiz'; Args=@('--headless','--quit-after','3600','--scene','res://tests/quiz_demo.tscn','--','--no-save') }
 )
 foreach ($case in $cases) {
     $log = Join-Path $logs ($case.Name + '.log')

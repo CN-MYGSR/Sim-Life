@@ -1,4 +1,4 @@
-param([Parameter(ValueFromRemainingArguments=$true)][string[]]$GodotArgs)
+# Deliberately no param() binder: preserve Godot's native --flags and -- delimiter.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $editor = $env:SIM_LIFE_GODOT
@@ -8,5 +8,5 @@ if (-not $editor) {
 if (-not (Test-Path -LiteralPath $editor -PathType Leaf)) {
     throw 'Set SIM_LIFE_GODOT to the official Godot 4.7.2 console executable.'
 }
-& $editor --path $projectRoot @GodotArgs
+& $editor --path $projectRoot @args
 exit $LASTEXITCODE

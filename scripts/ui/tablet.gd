@@ -23,6 +23,7 @@ var nav: Dictionary = {}
 var expanded_vehicle: int = -1
 var _cash_label: Label
 var _job_label: Label
+var _rebuild_pending := false
 
 
 func _ready() -> void:
@@ -40,6 +41,13 @@ func _ready() -> void:
 
 
 func _on_data_changed() -> void:
+	if visible and not _rebuild_pending:
+		_rebuild_pending = true
+		_deferred_rebuild.call_deferred()
+
+
+func _deferred_rebuild() -> void:
+	_rebuild_pending = false
 	if visible:
 		_rebuild()
 

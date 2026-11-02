@@ -64,6 +64,7 @@ func _run() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	expect(world.builder.kit_buildings.size() >= 12, "public buildings generated")
+	expect(world.builder.kit_buildings[0].batched_boxes > 0, "static furniture batching is active")
 	expect(KitLib.mesh_of("Brick_Window_Trim_Single") != null, "missing kit has visible mesh")
 	var actor := CharacterModel.create("__missing_test_character")
 	add_child(actor)
@@ -113,6 +114,37 @@ func _run() -> void:
 	cash_before = Game.cash
 	arrest._npc.take_damage(1000)
 	expect(Game.missions.is_empty() and Game.cash == cash_before, "killing target cannot award arrest payment")
+	Game.set_job("police")
+	Game.player.weapon_sys.mag = 3
+	Game.holster_weapon()
+	Game.equip_weapon("glock")
+	expect(Game.player.weapon_sys.mag == 3, "holstering and equipping does not refill magazine")
+	Game.player.weapon_sys.mag = 2
+	Game.equip_weapon("glock")
+	expect(Game.player.weapon_sys.mag == 2, "equipping same weapon does not refill magazine")
+	Game.save_path = "res://.artifacts/regression.save"
+	expect(Game.save_game(false), "save writes and verifies snapshot")
+	var saved_cash: int = Game.cash
+	Game.cash += 100
+	expect(Game.save_game(false), "second save replaces primary and retains backup")
+	Game.cash = 0
+	expect(Game.load_game(false) and Game.cash == saved_cash + 100, "save roundtrip restores economy")
+	var invalid := Game.snapshot()
+	invalid["health"] = NAN
+	expect(not SaveValidation.valid(invalid), "non-finite state rejected")
+	invalid = Game.snapshot()
+	invalid["vehicles"][0]["engine"] = 99
+	expect(not SaveValidation.valid(invalid), "out-of-range saved upgrade rejected")
+	var corrupt := FileAccess.open(Game.save_path, FileAccess.WRITE)
+	corrupt.store_string("corrupted")
+	corrupt.close()
+	expect(Game.load_game(false) and Game.cash == saved_cash, "corrupt primary recovers last valid backup")
+	corrupt = FileAccess.open(Game.save_path + ".bak", FileAccess.WRITE)
+	corrupt.store_string("corrupted")
+	corrupt.close()
+	Game.cash = 777
+	expect(not Game.load_game(false) and Game.cash == 777, "unreadable saves never reset current game")
+	Game.save_path = "user://saves/city.save"
 	world.queue_free()
 	await get_tree().process_frame
 	print("REGRESSION: ", checks, " checks, ", failures, " failures")

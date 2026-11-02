@@ -20,6 +20,7 @@ var _env_t: float = 0.0
 var _decorating: bool = false
 var _decor_prop: String = ""
 var _debug_mode: bool = false
+var _autosave_t := 0.0
 
 # 店铺经营
 var _biz_active: bool = false
@@ -72,6 +73,11 @@ func _ready() -> void:
 
 	spawn_ambient_npcs()
 	refresh_vehicles()
+	_rebuild_furniture()
+	for mission in Game.missions:
+		spawn_mission(mission)
+	if Game.persistence_enabled:
+		get_tree().auto_accept_quit = false
 	_intro()
 	_handle_debug()
 
@@ -458,6 +464,11 @@ func _setup_env() -> void:
 
 
 func _process(delta: float) -> void:
+	if Game.persistence_enabled:
+		_autosave_t += delta
+		if _autosave_t >= 60.0:
+			_autosave_t = 0.0
+			Game.save_game(false)
 	_update_business(delta)
 	_env_t += delta
 	if _env_t < 0.12:
@@ -567,8 +578,10 @@ func _update_sky() -> void:
 func _spawn_player() -> void:
 	player = Player.new()
 	player.name = "Player"
-	player.position = Vector3(2, 0.3, 14)
+	player.position = Game.player_state["position"]
+	player.rotation.y = float(Game.player_state["yaw"])
 	add_child(player)
+	player.head.rotation.x = float(Game.player_state["pitch"])
 	Game.player = player
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -739,7 +752,9 @@ func _toggle_pause() -> void:
 	v.add_child(sep)
 
 	v.add_child(_mk_btn("继续游戏", func(): _close_pause(), "primary"))
-	v.add_child(_mk_btn("退出到桌面", func(): get_tree().quit(), "normal"))
+	v.add_child(_mk_btn("保存游戏", func(): Game.save_game(), "normal"))
+	v.add_child(_mk_btn("读取存档", _load_saved_game, "normal"))
+	v.add_child(_mk_btn("保存并退出", _quit_game, "normal"))
 
 	var hint := Label.new()
 	hint.text = "WASD 移动 · Shift 奔跑 · E 交互 · TAB 平板 · B 装修"
@@ -761,6 +776,50 @@ func _close_pause() -> void:
 	if is_instance_valid(player):
 		player.in_ui = false
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func capture_state() -> void:
+	if is_instance_valid(player):
+		var pos := player.global_position
+		if player.driving:
+			for vehicle in vehicles_root.get_children():
+				if vehicle is Vehicle and vehicle.driven:
+					pos = vehicle._safe_exit_position()
+					if pos == Vector3.INF:
+						pos = vehicle.global_position + Vector3(0, 4, 0)
+		Game.player_state = {"position": pos, "yaw": player.rotation.y, "pitch": player.head.rotation.x}
+		if player.weapon_sys.weapon_id != "":
+			Game.weapon_ammo[player.weapon_sys.weapon_id] = player.weapon_sys.mag
+	for vehicle in vehicles_root.get_children():
+		if vehicle is Vehicle:
+			var data := Game.vehicle_by_uid(vehicle.uid)
+			if not data.is_empty():
+				data["position"] = vehicle.global_position
+				data["rotation"] = vehicle.rotation.y
+
+
+func _load_saved_game() -> void:
+	if Game.load_game():
+		_close_pause()
+		get_tree().reload_current_scene()
+
+
+func _quit_game() -> void:
+	if not Game.persistence_enabled or Game.save_game():
+		get_tree().quit()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_quit_game()
+
+
+func _exit_tree() -> void:
+	if Game.world == self:
+		Game.world = null
+		Game.player = null
+		Game.hud = null
+		Game.tablet = null
 
 
 func _try_decorate() -> void:

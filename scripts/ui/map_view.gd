@@ -13,6 +13,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if not is_visible_in_tree():
+		return
 	_t += delta
 	if _t > 0.08:
 		_t = 0.0

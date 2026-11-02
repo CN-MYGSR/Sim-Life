@@ -31,6 +31,10 @@ var shops: Dictionary = {}             # shop_id -> expire_day
 var missions: Array = []               # [{id,type,title,reward,target,progress,need,meta}]
 var weapons_owned: Dictionary = {}     # weapon_id -> true
 var weapon: String = ""                # 当前装备的武器 id
+var weapon_ammo: Dictionary = {}
+var player_state: Dictionary = {"position": Vector3(2, 0.3, 14), "yaw": 0.0, "pitch": 0.0}
+var save_path := "user://saves/city.save"
+var persistence_enabled := true
 var stats: Dictionary = {"missions_done": 0, "earned": 0, "arrests": 0, "fires": 0, "heals": 0}
 
 # ─────────────── 场景引用 ───────────────
@@ -43,6 +47,8 @@ var places: Dictionary = {}            # place_id -> Vector3 (门口世界坐标
 var _mission_seq: int = 0
 var _font: FontFile = null
 var _theme: Theme = null
+var _ui_tick := 0.0
+var _last_heat_stars := 0
 
 
 func _init() -> void:
@@ -64,6 +70,9 @@ func _ready() -> void:
 	var win := get_window()
 	if win:
 		win.theme = _theme
+	persistence_enabled = not "--no-save" in OS.get_cmdline_user_args()
+	if persistence_enabled:
+		load_game(false)
 
 
 # ═══════════════ 输入映射 ═══════════════
@@ -183,14 +192,20 @@ func _process(delta: float) -> void:
 		day += 1
 		_decay_shop_rent()
 		_payday()
-	time_changed.emit()
+	_ui_tick += delta
+	if _ui_tick >= 0.25:
+		_ui_tick = fmod(_ui_tick, 0.25)
+		time_changed.emit()
 	# 体力恢复
 	if is_instance_valid(player) and player.has_method("is_moving") and not bool(player.call("is_moving")):
 		stamina = min(100.0, stamina + delta * 6.0)
 	# 通缉度缓慢衰减
 	if heat > 0.0:
 		heat = max(0.0, heat - delta * 0.02)
-		heat_changed.emit()
+		var stars := ceili(heat)
+		if stars != _last_heat_stars:
+			_last_heat_stars = stars
+			heat_changed.emit()
 
 
 func get_hour() -> float:
@@ -724,9 +739,58 @@ func reset_new_game() -> void:
 	vehicles.clear()
 	weapons_owned.clear()
 	weapon = ""
+	weapon_ammo.clear()
+	player_state = {"position": Vector3(2, 0.3, 14), "yaw": 0.0, "pitch": 0.0}
+	_mission_seq = 0
 	active_vehicle = -1
 	shops.clear()
 	missions.clear()
 	stats = {"missions_done": 0, "earned": 0, "arrests": 0, "fires": 0, "heals": 0}
 	cash_changed.emit()
 	job_changed.emit()
+
+
+func snapshot() -> Dictionary:
+	if is_instance_valid(world) and world.has_method("capture_state"):
+		world.capture_state()
+	return {
+		"cash": cash, "bank": bank, "job": job, "gang": gang, "health": health,
+		"stamina": stamina, "heat": heat, "day": day, "clock": clock,
+		"properties": properties.duplicate(true), "vehicles": vehicles.duplicate(true),
+		"shops": shops.duplicate(true), "missions": missions.duplicate(true),
+		"weapons_owned": weapons_owned.duplicate(true), "weapon": weapon,
+		"weapon_ammo": weapon_ammo.duplicate(true), "stats": stats.duplicate(true),
+		"player_state": player_state.duplicate(true), "mission_seq": _mission_seq,
+	}
+
+
+func save_game(notify := true) -> bool:
+	var state := snapshot()
+	if not SaveValidation.valid(state):
+		if notify:
+			toast.emit("保存失败：当前状态未通过校验", "error")
+		return false
+	var err := SaveStore.write(save_path, state)
+	if notify or err != OK:
+		toast.emit("游戏已保存" if err == OK else "保存失败：%s" % error_string(err), "ok" if err == OK else "error")
+	return err == OK
+
+
+func load_game(notify := true) -> bool:
+	var state := SaveStore.read(save_path)
+	var recovered := false
+	if not SaveValidation.valid(state):
+		state = SaveStore.read(save_path + ".bak")
+		recovered = true
+	if not SaveValidation.valid(state):
+		if notify:
+			toast.emit("没有可读取的有效存档，当前游戏保持不变", "warn")
+		return false
+	for key in ["cash", "bank", "job", "gang", "health", "stamina", "heat", "day", "clock", "properties", "vehicles", "shops", "missions", "weapons_owned", "weapon", "weapon_ammo", "stats", "player_state"]:
+		set(key, state[key])
+	_mission_seq = int(state["mission_seq"])
+	active_vehicle = -1
+	_decay_shop_rent()
+	if notify or recovered:
+		toast.emit("已从备份存档恢复" if recovered else "存档已读取", "ok")
+	return true

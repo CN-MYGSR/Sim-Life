@@ -27,6 +27,7 @@ var _batch: Dictionary = {}
 var _boxes: Dictionary = {}
 var _win_transforms: Array = []
 var _win_glow: MultiMeshInstance3D
+var batched_boxes := 0
 
 
 func setup(p: Dictionary, main_node: Node, r: RandomNumberGenerator) -> void:
@@ -67,6 +68,7 @@ func build_to(parent: Node3D) -> Node3D:
 	_build_sign()
 	_build_decor()
 	_flush_all()
+	batched_boxes = StaticBatcher.batch_boxes(_root)
 	return _root
 
 

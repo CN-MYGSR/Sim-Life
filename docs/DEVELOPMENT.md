@@ -46,3 +46,20 @@ Business is limited to a valid rented shop/career/proximity; customers expire af
 Run `./tools/test.ps1` for automated verification. Local logs are under `.artifacts/`.
 The development host has an AMD FirePro W2100 with 2 GiB VRAM. Forward+ initialization
 works; the Windows session has no working WASAPI output, so audio listening remains unverified.
+
+## Persistence and batching pass
+
+The suite now passes 42 regression checks plus the existing quiz tests. It exercises
+save roundtrip, atomic replacement, backup recovery after corruption, rejecting non-finite
+and invalid upgrades, and leaving current state intact when neither save is readable.
+Saves use `user://saves/city.save` with a `.bak` recovery copy. The pause menu exposes
+save/load and save-and-quit; a 60-second autosave and window-close save are enabled in
+normal play. Tests pass `--no-save` and use an isolated `.artifacts/regression.save`.
+Positions, furniture, careers, rent, money, mission waypoints, weapons and magazines persist.
+Reloading/equipping a weapon no longer refills its magazine.
+
+Static interior boxes are grouped by material into per-building MultiMeshes after layout
+and path pruning. Furniture collision shapes and existing facade batching remain in place.
+The four-block-per-side scene now has about 3,000 nodes instead of about 6,100 with the
+fallback visuals. Raw runs are kept locally; renderer-specific comparisons still require
+an identical camera, seed, viewport and warmup. No FPS gain is claimed from node count alone.
